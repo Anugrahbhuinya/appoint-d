@@ -1,14 +1,5 @@
-import { defineConfig } from "drizzle-kit";
+// MongoDB configuration - no longer using Drizzle ORM
+// This file is kept for reference but is not used in the MongoDB implementation
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
-}
-
-export default defineConfig({
-  out: "./migrations",
-  schema: "./shared/schema.ts",
-  dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL,
-  },
-});
+// MongoDB connection is handled in server/mongodb-storage.ts
+// Schema definitions are in shared/mongodb-schema.ts

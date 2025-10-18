@@ -18,17 +18,17 @@ const faqCategories = [
 const faqData = [
   {
     category: "general",
-    question: "What is MedConnect?",
-    answer: "MedConnect is a comprehensive telemedicine platform that connects patients with verified healthcare professionals in Ranchi and surrounding areas. Our platform offers video consultations, appointment booking, digital prescriptions, and secure health record management."
+    question: "What is appoint'd?",
+    answer: "appoint'd is a comprehensive telemedicine platform that connects patients with verified healthcare professionals in Ranchi and surrounding areas. Our platform offers video consultations, appointment booking, digital prescriptions, and secure health record management."
   },
   {
     category: "general",
-    question: "How do I get started with MedConnect?",
+    question: "How do I get started with appoint'd?",
     answer: "Getting started is easy! Simply create an account by clicking 'Sign Up' and choose whether you're a patient or a doctor. For patients, you can immediately start searching for doctors and booking appointments. Doctors need to complete verification before they can start practicing on our platform."
   },
   {
     category: "general",
-    question: "Is MedConnect available 24/7?",
+    question: "Is appoint'd available 24/7?",
     answer: "While our platform is accessible 24/7, doctor availability varies based on their individual schedules. Many of our healthcare providers offer extended hours, and we have emergency consultation options available."
   },
   {
@@ -53,7 +53,7 @@ const faqData = [
   },
   {
     category: "doctors",
-    question: "How do I join MedConnect as a doctor?",
+    question: "How do I join appoint'd as a doctor?",
     answer: "To join as a doctor: 1) Sign up and select 'Doctor' as your user type, 2) Complete your professional profile with specialization, experience, and consultation fees, 3) Upload required documents (medical license, educational certificates, experience letters), 4) Wait for admin verification (usually 2-3 business days), 5) Once approved, you can start receiving patients and managing your practice."
   },
   {
@@ -94,12 +94,12 @@ const faqData = [
   {
     category: "privacy",
     question: "Who can access my medical information?",
-    answer: "Your medical information can only be accessed by: You (the patient), Healthcare providers you've consulted with, Authorized MedConnect support staff (only for technical support, with your consent). We maintain detailed audit logs of all data access for your security and privacy."
+    answer: "Your medical information can only be accessed by: You (the patient), Healthcare providers you've consulted with, Authorized appoint'd support staff (only for technical support, with your consent). We maintain detailed audit logs of all data access for your security and privacy."
   },
   {
     category: "technical",
     question: "What devices and browsers are supported?",
-    answer: "MedConnect works on: Computers: Chrome, Firefox, Safari, Edge (latest versions), Mobile devices: iOS 12+ (Safari), Android 8+ (Chrome), Tablets: iPad (iOS 12+), Android tablets (Android 8+). For video consultations, ensure you have a camera and microphone."
+    answer: "appoint'd works on: Computers: Chrome, Firefox, Safari, Edge (latest versions), Mobile devices: iOS 12+ (Safari), Android 8+ (Chrome), Tablets: iPad (iOS 12+), Android tablets (Android 8+). For video consultations, ensure you have a camera and microphone."
   },
   {
     category: "technical",
@@ -134,7 +134,7 @@ export default function FAQPage() {
           <div className="text-center mb-12" data-testid="hero-section">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">Frequently Asked Questions</h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Find answers to common questions about MedConnect. Can't find what you're looking for? 
+              Find answers to common questions about appoint'd. Can't find what you're looking for? 
               Contact our support team.
             </p>
           </div>

@@ -2,6 +2,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    // Attempt to read JSON error first, fall back to text
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }
@@ -12,11 +13,28 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  let headers: HeadersInit = {
+    credentials: "include",
+  };
+  
+  let body: BodyInit | undefined;
+
+  // Check if data is FormData (file upload)
+  if (data instanceof FormData) {
+    // IMPORTANT: DO NOT set the Content-Type header for FormData. 
+    // The browser must set it automatically along with the boundary marker.
+    body = data;
+    
+  } else if (data !== undefined) {
+    // For regular JSON payloads (login, registration, updates)
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(data);
+  }
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    headers,
+    body,
   });
 
   await throwIfResNotOk(res);

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth"; // Keeping alias as per your project structure
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Heart, Users, UserCog, Stethoscope, Shield, Video } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema } from "@shared/mongodb-schema"; // Keeping alias as per your project structure
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -21,7 +21,7 @@ const loginSchema = z.object({
 const registerSchema = insertUserSchema.extend({
   confirmPassword: z.string(),
   role: z.enum(["patient", "doctor"]),
-}).refine((data) => data.password === data.confirmPassword, {
+}).refine((data: any) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
@@ -31,6 +31,7 @@ type RegisterData = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [selectedPortal, setSelectedPortal] = useState<"patient" | "doctor" | "admin" | null>(null);
   const [, setLocation] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
 
@@ -45,21 +46,66 @@ export default function AuthPage() {
     },
   });
 
-  // Redirect if already logged in
+  /**
+   * FIX: Handles navigation/redirection after successful login/registration.
+   * This is moved to useEffect to prevent the "Cannot update a component while rendering a different component" warning.
+   */
+  useEffect(() => {
+    if (user) {
+      const redirectPath = user.role === "admin" ? "/admin" : user.role === "doctor" ? "/doctor" : "/patient";
+      // setLocation is a side effect and must run after render
+      setLocation(redirectPath);
+    }
+  }, [user, setLocation]); // Re-run effect whenever user object changes
+
+  // If the user is present (meaning they are authenticated), return null 
+  // immediately to stop rendering the AuthPage. The useEffect will handle navigation.
   if (user) {
-    const redirectPath = user.role === "admin" ? "/admin" : user.role === "doctor" ? "/doctor" : "/patient";
-    setLocation(redirectPath);
     return null;
   }
+  // ======================================================
 
   const onLogin = async (data: LoginData) => {
     try {
-      await loginMutation.mutateAsync(data);
-      const userRole = loginMutation.data?.role;
-      if (userRole) {
-        const redirectPath = userRole === "admin" ? "/admin" : userRole === "doctor" ? "/doctor" : "/patient";
-        setLocation(redirectPath);
+      // Handle admin login with hardcoded credentials
+      if (selectedPortal === "admin") {
+        if (data.username === "admin123" && data.password === "qwertyuiop1234567890") {
+          // Create a mock admin user object
+          const adminUser = {
+            _id: "admin",
+            username: "admin123",
+            email: "admin@appointd.com",
+            role: "admin" as const,
+            firstName: "Admin",
+            lastName: "User",
+            isVerified: true,
+            isActive: true,
+            createdAt: new Date(),
+          };
+          
+          // Set the admin user in the auth context
+          localStorage.setItem("adminUser", JSON.stringify(adminUser));
+          // For local storage admin login, we still call setLocation here 
+          // to trigger the redirect immediately, as the 'user' object won't update
+          // until the next query runs.
+          setLocation("/admin");
+          return;
+        } else {
+          throw new Error("Invalid admin credentials");
+        }
       }
+      
+      const result = await loginMutation.mutateAsync(data);
+      console.log("Login result:", result);
+      
+      // When loginMutation is successful, the 'user' object in useAuth should update, 
+      // triggering the useEffect for navigation. We only keep this setLocation here
+      // for redundancy/immediate feedback if necessary.
+      if (result?.role) {
+         const redirectPath = result.role === "admin" ? "/admin" : result.role === "doctor" ? "/doctor" : "/patient";
+         setLocation(redirectPath);
+      }
+
     } catch (error) {
       console.error("Login failed:", error);
     }
@@ -68,15 +114,44 @@ export default function AuthPage() {
   const onRegister = async (data: RegisterData) => {
     try {
       const { confirmPassword, ...registerData } = data;
-      await registerMutation.mutateAsync(registerData);
-      const userRole = registerMutation.data?.role;
-      if (userRole) {
-        const redirectPath = userRole === "doctor" ? "/doctor" : "/patient";
-        setLocation(redirectPath);
+      const result = await registerMutation.mutateAsync(registerData);
+      console.log("Registration result:", result);
+      
+      // When registerMutation is successful, the 'user' object in useAuth should update, 
+      // triggering the useEffect for navigation. We keep this setLocation for redundancy.
+      if (result?.role) {
+         const redirectPath = result.role === "doctor" ? "/doctor" : "/patient";
+         setLocation(redirectPath);
       }
+
     } catch (error) {
       console.error("Registration failed:", error);
     }
+  };
+
+  const handlePortalSelection = (portal: "patient" | "doctor" | "admin") => {
+    setSelectedPortal(portal);
+    if (portal === "admin") {
+      // For admin, we only show login form
+      setIsLogin(true);
+    } else {
+      // For patient/doctor, show registration form
+      setIsLogin(false);
+      registerForm.setValue("role", portal);
+    }
+  };
+
+  const resetPortalSelection = () => {
+    setSelectedPortal(null);
+    setIsLogin(true);
+  };
+
+  const clearAllData = () => {
+    localStorage.removeItem("adminUser");
+    setSelectedPortal(null);
+    setIsLogin(true);
+    // Force refresh the user query
+    window.location.reload();
   };
 
   return (
@@ -88,7 +163,7 @@ export default function AuthPage() {
             <div className="text-center mb-6">
               <div className="flex items-center justify-center space-x-2 mb-4">
                 <Heart className="h-8 w-8 text-primary" />
-                <span className="text-2xl font-bold text-primary">MedConnect</span>
+                <span className="text-2xl font-bold text-primary">appoint'd</span>
               </div>
               <h2 className="text-2xl font-bold">
                 {isLogin ? "Welcome Back" : "Create Account"}
@@ -96,50 +171,78 @@ export default function AuthPage() {
               <p className="text-muted-foreground mt-2">
                 {isLogin ? "Choose your portal to continue" : "Join our healthcare platform"}
               </p>
+              {selectedPortal && (
+                <div className="mt-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-primary">
+                        {selectedPortal === "admin" ? "Admin Login" : 
+                          selectedPortal === "doctor" ? "Doctor Portal" : "Patient Portal"}
+                      </p>
+                      {selectedPortal === "admin" && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Use admin credentials to access the admin panel
+                        </p>
+                      )}
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={resetPortalSelection}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {isLogin && (
+            {isLogin && !selectedPortal && (
               <div className="space-y-3 mb-6">
                 <Button 
-                  variant="outline" 
+                  variant={selectedPortal === "patient" ? "default" : "outline"}
                   className="w-full justify-start" 
                   data-testid="button-patient-portal"
-                  onClick={() => {/* Handle patient portal selection */}}
+                  onClick={() => handlePortalSelection("patient")}
                 >
                   <Users className="mr-3 h-4 w-4" />
                   Patient Portal
                 </Button>
                 
                 <Button 
-                  variant="outline" 
+                  variant={selectedPortal === "doctor" ? "default" : "outline"}
                   className="w-full justify-start"
                   data-testid="button-doctor-portal"
-                  onClick={() => {/* Handle doctor portal selection */}}
+                  onClick={() => handlePortalSelection("doctor")}
                 >
                   <Stethoscope className="mr-3 h-4 w-4" />
                   Doctor Portal
                 </Button>
                 
                 <Button 
-                  variant="outline" 
+                  variant={selectedPortal === "admin" ? "default" : "outline"}
                   className="w-full justify-start"
                   data-testid="button-admin-portal"
-                  onClick={() => {/* Handle admin portal selection */}}
+                  onClick={() => handlePortalSelection("admin")}
                 >
                   <UserCog className="mr-3 h-4 w-4" />
                   Admin Portal
                 </Button>
               </div>
             )}
-
-            {isLogin ? (
+            
+            {/* Show login form if selected portal or if isLogin is true and no portal is selected (initial view) */}
+            {isLogin && selectedPortal && (
               <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4" data-testid="login-form">
                 <div>
-                  <Label htmlFor="username">Email or Username</Label>
+                  <Label htmlFor="username">
+                    {selectedPortal === "admin" ? "Admin Username" : "Email or Username"}
+                  </Label>
                   <Input 
                     id="username"
                     type="text" 
-                    placeholder="Enter your username or email"
+                    placeholder={selectedPortal === "admin" ? "Enter admin username" : "Enter your username or email"}
                     data-testid="input-username"
                     {...loginForm.register("username")}
                   />
@@ -149,11 +252,13 @@ export default function AuthPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">
+                    {selectedPortal === "admin" ? "Admin Password" : "Password"}
+                  </Label>
                   <Input 
                     id="password"
                     type="password" 
-                    placeholder="Enter your password"
+                    placeholder={selectedPortal === "admin" ? "Enter admin password" : "Enter your password"}
                     data-testid="input-password"
                     {...loginForm.register("password")}
                   />
@@ -181,7 +286,9 @@ export default function AuthPage() {
                   {loginMutation.isPending ? "Signing In..." : "Sign In"}
                 </Button>
               </form>
-            ) : (
+            )}
+
+            {!isLogin && selectedPortal && ( // Only show register form if a portal is selected
               <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4" data-testid="register-form">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -248,7 +355,9 @@ export default function AuthPage() {
 
                 <div>
                   <Label htmlFor="role">User Type</Label>
-                  <Select onValueChange={(value) => registerForm.setValue("role", value as "patient" | "doctor")}>
+                  <Select 
+                    value={registerForm.getValues("role")} 
+                    onValueChange={(value) => registerForm.setValue("role", value as "patient" | "doctor")}>
                     <SelectTrigger data-testid="select-role">
                       <SelectValue />
                     </SelectTrigger>
@@ -306,6 +415,7 @@ export default function AuthPage() {
               </form>
             )}
 
+            {/* Show toggle button only if a portal is selected, or if showing login forms */}
             <p className="text-center text-sm text-muted-foreground mt-6">
               {isLogin ? "Don't have an account?" : "Already have an account?"}
               <Button 
@@ -317,6 +427,18 @@ export default function AuthPage() {
                 {isLogin ? "Sign up here" : "Sign in here"}
               </Button>
             </p>
+            
+            {/* Debug button - remove in production */}
+            <div className="mt-4 text-center">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={clearAllData}
+                className="text-xs"
+              >
+                Clear All Data & Reset
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

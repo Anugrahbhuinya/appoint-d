@@ -12,6 +12,9 @@ import { apiRequest } from "@/lib/queryClient";
 import Navigation from "@/components/navigation";
 import DoctorCard from "@/components/doctor-card";
 import AppointmentCard from "@/components/appointment-card";
+import AppointmentBookingModal from "@/components/appointment-booking-modal";
+import PatientProfileManager from "@/components/patient-profile-manager";
+import HealthRecordsManager from "@/components/health-records-manager";
 import { 
   Search, 
   Calendar, 
@@ -161,6 +164,15 @@ export default function PatientPortal() {
 
             <nav className="space-y-2">
               <Button
+                variant={activeTab === "profile" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveTab("profile")}
+                data-testid="button-profile"
+              >
+                <User className="w-4 h-4 mr-3" />
+                Profile
+              </Button>
+              <Button
                 variant={activeTab === "search" ? "default" : "ghost"}
                 className="w-full justify-start"
                 onClick={() => setActiveTab("search")}
@@ -195,15 +207,6 @@ export default function PatientPortal() {
               >
                 <PillBottle className="w-4 h-4 mr-3" />
                 Prescriptions
-              </Button>
-              <Button
-                variant={activeTab === "profile" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("profile")}
-                data-testid="button-profile"
-              >
-                <User className="w-4 h-4 mr-3" />
-                Profile
               </Button>
             </nav>
 
@@ -244,11 +247,16 @@ export default function PatientPortal() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Specializations</SelectItem>
-                          <SelectItem value="cardiology">Cardiology</SelectItem>
-                          <SelectItem value="dermatology">Dermatology</SelectItem>
-                          <SelectItem value="pediatrics">Pediatrics</SelectItem>
-                          <SelectItem value="neurology">Neurology</SelectItem>
-                          <SelectItem value="orthopedics">Orthopedics</SelectItem>
+                          <SelectItem value="gp">General Physician (GP) / Internal Medicine (Handles common colds, fevers, flu, minor infections, general triage)</SelectItem>
+                          <SelectItem value="dermatology">Dermatology (Visual conditions like rashes, acne, hair loss, eczema, skin allergies)</SelectItem>
+                          <SelectItem value="psychiatry">Psychiatry / Clinical Psychology (Anxiety, depression, sleep issues, medication management, counseling)</SelectItem>
+                          <SelectItem value="gynaecology">Gynaecology / Women's Health (Irregular periods, contraception, hormonal issues, UTI follow-ups, PCOD/PCOS management)</SelectItem>
+                          <SelectItem value="pediatrics">Pediatrics (Non-Acute) (Childhood fevers, common cold, nutritional/developmental advice, rashes in children)</SelectItem>
+                          <SelectItem value="dietetics">Dietetics / Nutrition (Weight management, chronic disease diet plans, nutritional deficiencies, lifestyle coaching)</SelectItem>
+                          <SelectItem value="ent">ENT (Ear, Nose, Throat) (Sinus issues, sore throat, allergies, vertigo, non-acute hearing loss counseling)</SelectItem>
+                          <SelectItem value="urology">Urology / Sexology (UTIs, male sexual health, bladder issues, and private health concerns)</SelectItem>
+                          <SelectItem value="gastroenterology">Gastroenterology (IBS, chronic acidity, gas, bloating, and medication management for digestive issues)</SelectItem>
+                          <SelectItem value="endocrinology">Endocrinology / Diabetology (Managing diabetes, thyroid disorders, and hormonal imbalances via lab result review and medication adjustment)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -332,7 +340,9 @@ export default function PatientPortal() {
                   ))
                 ) : doctors.length > 0 ? (
                   doctors.map((doctor) => (
-                    <DoctorCard key={doctor.id} doctor={doctor} />
+                    <AppointmentBookingModal key={doctor.id} doctor={doctor}>
+                      <DoctorCard doctor={doctor} />
+                    </AppointmentBookingModal>
                   ))
                 ) : (
                   <div className="col-span-2">
@@ -470,19 +480,7 @@ export default function PatientPortal() {
                 <p className="text-muted-foreground">Manage your personal health documents and reports</p>
               </div>
 
-              <Card>
-                <CardContent className="text-center py-12">
-                  <Upload className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Upload Health Records</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Upload and manage your medical reports, lab results, and prescriptions.
-                  </p>
-                  <Button data-testid="button-upload-records">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Documents
-                  </Button>
-                </CardContent>
-              </Card>
+              <HealthRecordsManager />
             </div>
           )}
 
@@ -515,19 +513,7 @@ export default function PatientPortal() {
                 <p className="text-muted-foreground">Manage your personal information</p>
               </div>
 
-              <Card>
-                <CardContent className="text-center py-12">
-                  <User className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Profile Management</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Update your personal information, emergency contacts, and health preferences.
-                  </p>
-                  <Button data-testid="button-edit-profile">
-                    <User className="w-4 h-4 mr-2" />
-                    Edit Profile
-                  </Button>
-                </CardContent>
-              </Card>
+              <PatientProfileManager user={user} />
             </div>
           )}
         </div>

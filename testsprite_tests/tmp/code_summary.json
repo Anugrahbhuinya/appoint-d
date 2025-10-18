@@ -1,0 +1,371 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "React",
+    "Express.js",
+    "MongoDB",
+    "Mongoose",
+    "Vite",
+    "Passport.js",
+    "Razorpay",
+    "Multer",
+    "Zod",
+    "Tailwind CSS",
+    "Radix UI"
+  ],
+  "features": [
+    {
+      "name": "User Authentication",
+      "description": "User registration, login, logout, and session management",
+      "files": ["server/routes.ts", "server/auth.ts", "shared/mongodb-schema.ts"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "User Authentication API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/register": {
+            "post": {
+              "summary": "Register a new user",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "username": {"type": "string"},
+                        "email": {"type": "string", "format": "email"},
+                        "password": {"type": "string", "minLength": 6},
+                        "role": {"type": "string", "enum": ["patient", "doctor", "admin"]},
+                        "firstName": {"type": "string"},
+                        "lastName": {"type": "string"},
+                        "phone": {"type": "string"}
+                      },
+                      "required": ["username", "email", "password"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "201": {"description": "User created successfully"},
+                "409": {"description": "Username or email already exists"},
+                "400": {"description": "Invalid data"}
+              }
+            }
+          },
+          "/api/login": {
+            "post": {
+              "summary": "User login",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "username": {"type": "string"},
+                        "password": {"type": "string"}
+                      },
+                      "required": ["username", "password"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {"description": "Login successful"},
+                "401": {"description": "Authentication failed"}
+              }
+            }
+          },
+          "/api/logout": {
+            "post": {
+              "summary": "User logout",
+              "responses": {
+                "200": {"description": "Logout successful"}
+              }
+            }
+          },
+          "/api/user": {
+            "get": {
+              "summary": "Get current user information",
+              "responses": {
+                "200": {"description": "User information"},
+                "401": {"description": "Not authenticated"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Doctor Management",
+      "description": "Doctor profile creation, management, and search functionality",
+      "files": ["server/routes.ts", "shared/mongodb-schema.ts"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Doctor Management API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/doctor/profile": {
+            "get": {
+              "summary": "Get doctor profile",
+              "responses": {
+                "200": {"description": "Doctor profile"},
+                "401": {"description": "Not authenticated"},
+                "403": {"description": "Doctor access required"},
+                "404": {"description": "Profile not found"}
+              }
+            },
+            "put": {
+              "summary": "Update doctor profile",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "specialization": {"type": "string"},
+                        "experience": {"type": "number"},
+                        "consultationFee": {"type": "number"},
+                        "bio": {"type": "string"},
+                        "qualifications": {"type": "array", "items": {"type": "string"}},
+                        "hospitalAffiliation": {"type": "string"},
+                        "licenseNumber": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {"description": "Profile updated"},
+                "400": {"description": "Invalid data"},
+                "401": {"description": "Not authenticated"},
+                "403": {"description": "Doctor access required"}
+              }
+            }
+          },
+          "/api/doctors": {
+            "get": {
+              "summary": "Search doctors",
+              "parameters": [
+                {"name": "specialization", "in": "query", "schema": {"type": "string"}},
+                {"name": "location", "in": "query", "schema": {"type": "string"}},
+                {"name": "minFee", "in": "query", "schema": {"type": "number"}},
+                {"name": "maxFee", "in": "query", "schema": {"type": "number"}}
+              ],
+              "responses": {
+                "200": {"description": "List of doctors"}
+              }
+            }
+          },
+          "/api/doctors/{id}": {
+            "get": {
+              "summary": "Get doctor by ID",
+              "parameters": [
+                {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}
+              ],
+              "responses": {
+                "200": {"description": "Doctor information"},
+                "404": {"description": "Doctor not found"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Appointment Management",
+      "description": "Create, manage, and track medical appointments",
+      "files": ["server/routes.ts", "shared/mongodb-schema.ts"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Appointment Management API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/appointments": {
+            "post": {
+              "summary": "Create new appointment",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "doctorId": {"type": "string"},
+                        "appointmentDate": {"type": "string", "format": "date-time"},
+                        "duration": {"type": "number", "default": 30},
+                        "type": {"type": "string", "enum": ["video", "in-person"]},
+                        "consultationFee": {"type": "number"},
+                        "notes": {"type": "string"}
+                      },
+                      "required": ["doctorId", "appointmentDate", "type", "consultationFee"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "201": {"description": "Appointment created"},
+                "400": {"description": "Invalid data"},
+                "401": {"description": "Not authenticated"}
+              }
+            },
+            "get": {
+              "summary": "Get user appointments",
+              "responses": {
+                "200": {"description": "List of appointments"},
+                "401": {"description": "Not authenticated"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Payment Processing",
+      "description": "Payment integration with Razorpay for appointment fees",
+      "files": ["server/routes.ts", "shared/mongodb-schema.ts"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Payment Processing API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/payments/create-order": {
+            "post": {
+              "summary": "Create Razorpay payment order",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "appointmentId": {"type": "string"},
+                        "amount": {"type": "number"}
+                      },
+                      "required": ["appointmentId", "amount"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {"description": "Payment order created"},
+                "400": {"description": "Invalid data"},
+                "401": {"description": "Not authenticated"}
+              }
+            }
+          },
+          "/api/payments/verify": {
+            "post": {
+              "summary": "Verify payment",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "razorpay_order_id": {"type": "string"},
+                        "razorpay_payment_id": {"type": "string"},
+                        "razorpay_signature": {"type": "string"}
+                      },
+                      "required": ["razorpay_order_id", "razorpay_payment_id", "razorpay_signature"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {"description": "Payment verified"},
+                "400": {"description": "Payment verification failed"},
+                "401": {"description": "Not authenticated"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "File Upload",
+      "description": "Profile picture and document upload functionality",
+      "files": ["server/routes.ts", "server/image-utils.ts"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "File Upload API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/upload/profile-picture": {
+            "post": {
+              "summary": "Upload profile picture",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "multipart/form-data": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "image": {"type": "string", "format": "binary"},
+                        "crop": {"type": "string"},
+                        "nudge": {"type": "string"}
+                      },
+                      "required": ["image"]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {"description": "Image uploaded successfully"},
+                "400": {"description": "No image uploaded"},
+                "401": {"description": "Not authenticated"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Admin Management",
+      "description": "Admin panel for managing users, doctors, and disputes",
+      "files": ["server/routes.ts", "server/routes-admin.ts"],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Admin Management API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/admin/users": {
+            "get": {
+              "summary": "Get all users",
+              "responses": {
+                "200": {"description": "List of users"},
+                "401": {"description": "Not authenticated"},
+                "403": {"description": "Admin access required"}
+              }
+            }
+          },
+          "/api/admin/doctors": {
+            "get": {
+              "summary": "Get all doctors",
+              "responses": {
+                "200": {"description": "List of doctors"},
+                "401": {"description": "Not authenticated"},
+                "403": {"description": "Admin access required"}
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

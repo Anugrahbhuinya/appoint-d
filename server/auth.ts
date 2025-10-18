@@ -5,8 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
-
+import { User as SelectUser } from "@shared/mongodb-schema";
 
 declare global {
   namespace Express {
@@ -16,13 +15,13 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
-async function hashPassword(password: string) {
+export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
   return `${buf.toString("hex")}.${salt}`;
 }
 
-async function comparePasswords(supplied: string, stored: string) {
+export async function comparePasswords(supplied: string, stored: string) {
   const [hashed, salt] = stored.split(".");
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
@@ -43,52 +42,65 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
-      if (!user || !(await comparePasswords(password, user.password))) {
-        return done(null, false);
-      } else {
-        return done(null, user);
+    new LocalStrategy(async (identifier, password, done) => {
+      console.log(`--- Login Attempt ---`);
+      console.log(`Received identifier: ${identifier}`);
+      
+      try {
+        // Try to find the user by username first
+        let user = await storage.getUserByUsername(identifier);
+        
+        // If no user found by username, try to find by email
+        if (!user) {
+          user = await storage.getUserByEmail(identifier);
+        }
+
+        if (!user) {
+          console.log(`Login Failed: User with identifier '${identifier}' not found.`);
+          console.log(`--- End of Login Attempt ---`);
+          return done(null, false, { message: "Invalid username or password" });
+        }
+        
+        console.log(`Found user: ${user.username}`);
+        
+        const passwordsMatch = await comparePasswords(password, user.password);
+        
+        if (!passwordsMatch) {
+          console.log(`Login Failed: Incorrect password for user '${user.username}'.`);
+          console.log(`--- End of Login Attempt ---`);
+          return done(null, false, { message: "Invalid username or password" });
+        }
+        
+        console.log(`Login Succeeded for user: ${user.username}`);
+        console.log(`--- End of Login Attempt ---`);
+        
+        // Convert to plain object before returning to Passport
+        return done(null, user.toObject()); 
+        
+      } catch (error) {
+        console.error("Authentication error:", error);
+        console.log(`--- End of Login Attempt ---`);
+        return done(error);
       }
     }),
   );
 
-  passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: number, done) => {
-    const user = await storage.getUser(id);
-    done(null, user);
-  });
-
-  app.post("/api/register", async (req, res, next) => {
-    const existingUser = await storage.getUserByUsername(req.body.username);
-    if (existingUser) {
-      return res.status(400).send("Username already exists");
+  // Serialize stores just the ID
+  passport.serializeUser((user, done) => done(null, user._id));
+  
+  // Deserialize retrieves the ID and attaches the full user object to req.user
+  passport.deserializeUser(async (id: string, done) => {
+    try {
+      const user = await storage.getUser(id);
+      
+      // FIX: Convert Mongoose Document to plain object for reliable access in routes
+      if (user) {
+        done(null, user.toObject());
+      } else {
+        done(null, false);
+      }
+    } catch (error) {
+      done(error);
     }
-
-    const user = await storage.createUser({
-      ...req.body,
-      password: await hashPassword(req.body.password),
-    });
-
-    req.login(user, (err) => {
-      if (err) return next(err);
-      res.status(201).json(user);
-    });
-  });
-
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
-  });
-
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
-    });
-  });
-
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
   });
 }

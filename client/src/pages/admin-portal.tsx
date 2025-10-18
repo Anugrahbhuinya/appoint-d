@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import Navigation from "@/components/navigation";
+import AdminDocumentVerification from "@/components/admin-document-verification";
+import AdminDoctorManagement from "@/components/admin-doctor-management";
+import AdminPatientManagement from "@/components/admin-patient-management";
 import { 
   Users, 
   UserCheck, 
@@ -20,7 +23,8 @@ import {
   ShieldCheck,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  FileText
 } from "lucide-react";
 
 interface PendingDoctor {
@@ -142,16 +146,25 @@ export default function AdminPortal() {
                 data-testid="button-doctors"
               >
                 <UserCheck className="w-4 h-4 mr-3" />
-                Doctor Verification
+                Doctor Management
               </Button>
               <Button
-                variant={activeTab === "users" ? "default" : "ghost"}
+                variant={activeTab === "documents" ? "default" : "ghost"}
                 className="w-full justify-start"
-                onClick={() => setActiveTab("users")}
-                data-testid="button-users"
+                onClick={() => setActiveTab("documents")}
+                data-testid="button-documents"
+              >
+                <FileText className="w-4 h-4 mr-3" />
+                Document Verification
+              </Button>
+              <Button
+                variant={activeTab === "patients" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveTab("patients")}
+                data-testid="button-patients"
               >
                 <Users className="w-4 h-4 mr-3" />
-                User Management
+                Patient Management
               </Button>
               <Button
                 variant={activeTab === "disputes" ? "default" : "ghost"}
@@ -331,12 +344,12 @@ export default function AdminPortal() {
                       <Button
                         variant="outline"
                         className="h-auto p-4 flex flex-col items-start"
-                        onClick={() => setActiveTab("users")}
-                        data-testid="quick-manage-users"
+                        onClick={() => setActiveTab("patients")}
+                        data-testid="quick-manage-patients"
                       >
                         <Users className="w-6 h-6 text-chart-1 mb-2" />
-                        <p className="font-medium">Manage Users</p>
-                        <p className="text-sm text-muted-foreground">{analytics?.totalUsers || 0} total</p>
+                        <p className="font-medium">Manage Patients</p>
+                        <p className="text-sm text-muted-foreground">{analytics?.totalPatients || 0} total</p>
                       </Button>
                       
                       <Button
@@ -358,100 +371,13 @@ export default function AdminPortal() {
 
           {activeTab === "doctors" && (
             <div data-testid="doctors-content">
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2">Doctor Verification</h1>
-                <p className="text-muted-foreground">Review and approve doctor applications</p>
-              </div>
+              <AdminDoctorManagement />
+            </div>
+          )}
 
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Pending Verifications</CardTitle>
-                    <div className="flex space-x-2">
-                      <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/20">
-                        {pendingDoctors.length} Pending
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {pendingDoctors.length > 0 ? (
-                    <div className="space-y-4">
-                      {pendingDoctors.map((doctor) => (
-                        <div key={doctor.id} className="border border-border rounded-lg p-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start space-x-4">
-                              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
-                                <span className="text-primary font-semibold">
-                                  {doctor.firstName?.[0]}{doctor.lastName?.[0]}
-                                </span>
-                              </div>
-                              <div>
-                                <h3 className="text-lg font-semibold" data-testid={`doctor-name-${doctor.id}`}>
-                                  Dr. {doctor.firstName} {doctor.lastName}
-                                </h3>
-                                <p className="text-primary font-medium" data-testid={`doctor-specialization-${doctor.id}`}>
-                                  {doctor.profile.specialization}
-                                </p>
-                                <p className="text-sm text-muted-foreground" data-testid={`doctor-experience-${doctor.id}`}>
-                                  {doctor.profile.experience} years experience
-                                </p>
-                                <p className="text-sm text-muted-foreground" data-testid={`doctor-license-${doctor.id}`}>
-                                  License: {doctor.profile.licenseNumber}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleVerifyDoctor(doctor.id, true)}
-                                disabled={verifyDoctorMutation.isPending}
-                                data-testid={`button-approve-${doctor.id}`}
-                              >
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleVerifyDoctor(doctor.id, false)}
-                                disabled={verifyDoctorMutation.isPending}
-                                data-testid={`button-reject-${doctor.id}`}
-                              >
-                                <XCircle className="w-4 h-4 mr-1" />
-                                Reject
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-4 grid grid-cols-3 gap-4">
-                            <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                              <CheckCircle className="w-5 h-5 text-green-400 mx-auto mb-1" />
-                              <p className="text-xs text-muted-foreground">Medical License</p>
-                              <p className="text-sm font-medium">Verified</p>
-                            </div>
-                            <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                              <CheckCircle className="w-5 h-5 text-green-400 mx-auto mb-1" />
-                              <p className="text-xs text-muted-foreground">Education</p>
-                              <p className="text-sm font-medium">Verified</p>
-                            </div>
-                            <div className="text-center p-3 bg-orange-500/10 rounded-lg">
-                              <Clock className="w-5 h-5 text-orange-400 mx-auto mb-1" />
-                              <p className="text-xs text-muted-foreground">Experience</p>
-                              <p className="text-sm font-medium">Pending</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-muted-foreground">No pending doctor verifications</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+          {activeTab === "documents" && (
+            <div data-testid="documents-content">
+              <AdminDocumentVerification />
             </div>
           )}
 
@@ -571,26 +497,9 @@ export default function AdminPortal() {
             </div>
           )}
 
-          {activeTab === "users" && (
-            <div data-testid="users-content">
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2">User Management</h1>
-                <p className="text-muted-foreground">Manage platform users and permissions</p>
-              </div>
-
-              <Card>
-                <CardContent className="text-center py-12">
-                  <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">User Management</h3>
-                  <p className="text-muted-foreground mb-4">
-                    View and manage all platform users, including blocking/unblocking functionality.
-                  </p>
-                  <Button data-testid="button-manage-users">
-                    <Users className="w-4 h-4 mr-2" />
-                    Manage Users
-                  </Button>
-                </CardContent>
-              </Card>
+          {activeTab === "patients" && (
+            <div data-testid="patients-content">
+              <AdminPatientManagement />
             </div>
           )}
 

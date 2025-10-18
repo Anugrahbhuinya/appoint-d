@@ -107,7 +107,7 @@ export default function ContactPage() {
                     <div>
                       <h3 className="font-semibold mb-1">Email Support</h3>
                       <p className="text-muted-foreground text-sm mb-2">We'll respond within 24 hours</p>
-                      <p className="font-mono text-primary" data-testid="contact-email">support@medconnect.com</p>
+                      <p className="font-mono text-primary" data-testid="contact-email">support@appointd.com</p>
                     </div>
                   </div>
 

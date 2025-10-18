@@ -78,11 +78,9 @@ export default function DoctorCard({ doctor }: DoctorCardProps) {
             </div>
 
             <div className="flex space-x-2">
-              <Link href="/patient">
-                <Button className="flex-1" data-testid={`button-book-appointment-${doctor.id}`}>
-                  Book Appointment
-                </Button>
-              </Link>
+              <Button className="flex-1" data-testid={`button-book-appointment-${doctor.id}`}>
+                Book Appointment
+              </Button>
               <Button variant="outline" size="sm" data-testid={`button-video-${doctor.id}`}>
                 <Video className="w-4 h-4" />
               </Button>

@@ -10,7 +10,8 @@ import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import DoctorPortal from "@/pages/doctor-portal";
 import PatientPortal from "@/pages/patient-portal";
-import AdminPortal from "@/pages/admin-portal";
+import AdminLogin from "@/pages/admin-login";
+import AdminDashboard from "@/pages/admin-dashboard";
 import AboutPage from "@/pages/about-page";
 import ContactPage from "@/pages/contact-page";
 import FAQPage from "@/pages/faq-page";
@@ -26,7 +27,8 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/doctor" component={DoctorPortal} />
       <ProtectedRoute path="/patient" component={PatientPortal} />
-      <ProtectedRoute path="/admin" component={AdminPortal} />
+      <Route path="/admin" component={AdminLogin} />
+      <Route path="/admin-portal" component={AdminDashboard} />
       <Route path="/about" component={AboutPage} />
       <Route path="/contact" component={ContactPage} />
       <Route path="/faq" component={FAQPage} />

@@ -11,7 +11,7 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto">
           {/* Hero Section */}
           <div className="text-center mb-16" data-testid="hero-section">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">About MedConnect</h1>
+            <h1 className="text-4xl md:text-5xl font-bold mb-6">About appoint'd</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Revolutionizing healthcare delivery by connecting patients with trusted medical professionals 
               through innovative technology and compassionate care.
@@ -54,7 +54,7 @@ export default function AboutPage() {
           {/* Why Choose Us */}
           <div className="mb-16" data-testid="why-choose-section">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4">Why Choose MedConnect?</h2>
+              <h2 className="text-3xl font-bold mb-4">Why Choose appoint'd?</h2>
               <p className="text-muted-foreground text-lg">Experience healthcare like never before with our comprehensive platform</p>
             </div>
             
@@ -116,7 +116,7 @@ export default function AboutPage() {
                   <h2 className="text-3xl font-bold mb-6">Our Story</h2>
                   <div className="space-y-6 text-muted-foreground leading-relaxed">
                     <p>
-                      MedConnect was born from a simple yet powerful idea: healthcare should be accessible to everyone, 
+                      appoint'd was born from a simple yet powerful idea: healthcare should be accessible to everyone, 
                       regardless of geographical barriers or time constraints. Founded in 2023 in the heart of Ranchi, 
                       we recognized the growing need for digital healthcare solutions in Jharkhand and across India.
                     </p>
@@ -127,7 +127,7 @@ export default function AboutPage() {
                       that bridges these gaps.
                     </p>
                     <p>
-                      Today, MedConnect serves thousands of patients and works with hundreds of verified healthcare 
+                      Today, appoint'd serves thousands of patients and works with hundreds of verified healthcare 
                       professionals. We continue to innovate and expand our services, always keeping our core mission 
                       at heart: making healthcare accessible, affordable, and convenient for all.
                     </p>
@@ -181,7 +181,7 @@ export default function AboutPage() {
           <div className="text-center" data-testid="stats-section">
             <Card>
               <CardContent className="p-12">
-                <h2 className="text-3xl font-bold mb-8">MedConnect in Numbers</h2>
+                <h2 className="text-3xl font-bold mb-8">appoint'd in Numbers</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                   <div data-testid="stat-doctors">
                     <div className="text-4xl font-bold text-primary mb-2">500+</div>

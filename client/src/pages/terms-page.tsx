@@ -65,7 +65,7 @@ export default function TermsPage() {
                   <div>
                     <h3 className="text-lg font-semibold mb-3">1. Acceptance of Terms</h3>
                     <p className="text-muted-foreground leading-relaxed">
-                      By accessing and using MedConnect ("the Platform"), you accept and agree to be bound by the terms 
+                      By accessing and using appoint'd ("the Platform"), you accept and agree to be bound by the terms 
                       and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
                     </p>
                   </div>
@@ -73,7 +73,7 @@ export default function TermsPage() {
                   <div>
                     <h3 className="text-lg font-semibold mb-3">2. Description of Service</h3>
                     <p className="text-muted-foreground leading-relaxed mb-3">
-                      MedConnect is a telemedicine platform that facilitates connections between patients and licensed 
+                      appoint'd is a telemedicine platform that facilitates connections between patients and licensed 
                       healthcare providers. Our services include:
                     </p>
                     <ul className="list-disc pl-6 text-muted-foreground space-y-1">
@@ -213,7 +213,7 @@ export default function TermsPage() {
                   <div className="bg-orange-500/10 p-4 rounded-lg">
                     <h3 className="font-semibold text-orange-600 mb-2">Important Notice</h3>
                     <p className="text-muted-foreground text-sm">
-                      MedConnect is a platform that facilitates connections between patients and healthcare providers. 
+                      appoint'd is a platform that facilitates connections between patients and healthcare providers. 
                       We do not practice medicine or provide medical advice directly.
                     </p>
                   </div>
@@ -225,7 +225,7 @@ export default function TermsPage() {
                     </p>
                     <p>
                       <strong>Doctor-Patient Relationship:</strong> The medical advice and treatment provided through our platform 
-                      establish a doctor-patient relationship between you and the individual healthcare provider, not with MedConnect.
+                      establish a doctor-patient relationship between you and the individual healthcare provider, not with appoint'd.
                     </p>
                     <p>
                       <strong>Verification:</strong> While we verify the credentials of healthcare providers on our platform, 
@@ -363,7 +363,7 @@ export default function TermsPage() {
                       <p className="text-muted-foreground text-sm mb-2">
                         For privacy-related questions and data protection requests:
                       </p>
-                      <p className="text-primary">privacy@medconnect.com</p>
+                      <p className="text-primary">privacy@appointd.com</p>
                     </div>
                     
                     <div>
@@ -371,7 +371,7 @@ export default function TermsPage() {
                       <p className="text-muted-foreground text-sm mb-2">
                         For legal matters and terms of service questions:
                       </p>
-                      <p className="text-primary">legal@medconnect.com</p>
+                      <p className="text-primary">legal@appointd.com</p>
                     </div>
 
                     <div>
@@ -379,14 +379,14 @@ export default function TermsPage() {
                       <p className="text-muted-foreground text-sm mb-2">
                         For general platform support and assistance:
                       </p>
-                      <p className="text-primary">support@medconnect.com</p>
+                      <p className="text-primary">support@appointd.com</p>
                       <p className="text-primary">+91 9876543210</p>
                     </div>
 
                     <div>
                       <h3 className="font-semibold mb-3">Mailing Address</h3>
                       <p className="text-muted-foreground text-sm">
-                        MedConnect Healthcare Pvt. Ltd.<br />
+                        appoint'd Healthcare Pvt. Ltd.<br />
                         123 Medical Plaza<br />
                         Ranchi, Jharkhand 834001<br />
                         India

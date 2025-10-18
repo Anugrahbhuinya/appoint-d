@@ -4,7 +4,7 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
+import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/mongodb-schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,7 +28,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
   } = useQuery<SelectUser | undefined, Error>({
     queryKey: ["/api/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async () => {
+      // Check for admin user in localStorage first
+      const adminUser = localStorage.getItem("adminUser");
+      if (adminUser) {
+        return JSON.parse(adminUser);
+      }
+      
+      // Otherwise, fetch from API
+      return getQueryFn({ on401: "returnNull" })({ queryKey: ["/api/user"] });
+    },
   });
 
   const loginMutation = useMutation({
@@ -67,7 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/logout");
+      // Check if admin user before removing
+      const adminUser = localStorage.getItem("adminUser");
+      
+      // Clear admin user from localStorage
+      localStorage.removeItem("adminUser");
+      
+      // Call API logout only if not admin
+      if (!adminUser) {
+        await apiRequest("POST", "/api/logout");
+      }
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);

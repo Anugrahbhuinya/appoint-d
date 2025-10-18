@@ -1,3 +1,4 @@
+
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { Heart, Menu, User, LogOut } from "lucide-react";
+import { Menu, User, LogOut } from "lucide-react";
 
 export default function Navigation() {
   const { user, logoutMutation } = useAuth();
@@ -25,8 +26,8 @@ export default function Navigation() {
           <div className="flex items-center space-x-4">
             <Link href="/">
               <div className="flex items-center space-x-2 cursor-pointer" data-testid="logo">
-                <Heart className="h-6 w-6 text-primary" />
-                <span className="text-xl font-bold text-primary">MedConnect</span>
+                
+                <span className="text-xl font-bold text-primary" style={{ fontFamily: 'Comfortaa' }}>appoint'd</span>
               </div>
             </Link>
           </div>

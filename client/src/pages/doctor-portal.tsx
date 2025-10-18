@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import Navigation from "@/components/navigation";
 import AppointmentCard from "@/components/appointment-card";
+import AvailabilityManager from "@/components/availability-manager";
+import DocumentUpload from "@/components/document-upload";
 import { 
   Users, 
   Calendar, 
@@ -27,7 +29,7 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertDoctorProfileSchema } from "@shared/schema";
+import { insertDoctorProfileSchema } from "@shared/mongodb-schema";
 import { z } from "zod";
 
 interface DoctorProfile {
@@ -565,19 +567,7 @@ export default function DoctorPortal() {
                 <p className="text-muted-foreground">Set your appointment slots and working hours</p>
               </div>
 
-              <Card>
-                <CardContent className="text-center py-12">
-                  <Clock className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Availability Management</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Set your working hours and available time slots for patient appointments.
-                  </p>
-                  <Button data-testid="button-setup-availability">
-                    <Clock className="w-4 h-4 mr-2" />
-                    Setup Availability
-                  </Button>
-                </CardContent>
-              </Card>
+              <AvailabilityManager />
             </div>
           )}
 
@@ -588,19 +578,7 @@ export default function DoctorPortal() {
                 <p className="text-muted-foreground">Upload and manage your professional credentials</p>
               </div>
 
-              <Card>
-                <CardContent className="text-center py-12">
-                  <Upload className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Document Upload</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Upload your medical license, educational certificates, and experience documents.
-                  </p>
-                  <Button data-testid="button-upload-documents">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Documents
-                  </Button>
-                </CardContent>
-              </Card>
+              <DocumentUpload />
             </div>
           )}
         </div>

@@ -7,15 +7,10 @@ export default defineConfig({
   plugins: [
     react(),
     runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
+    ...(process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined
       ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
+          await import("@replit/vite-plugin-cartographer").then((m) => m.cartographer()),
+          await import("@replit/vite-plugin-dev-banner").then((m) => m.devBanner()),
         ]
       : []),
   ],
@@ -36,5 +31,14 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // === FIX: Synchronizing target port to 5000 ===
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000', // CORRECTED PORT to match Express output
+        changeOrigin: true,
+        secure: false, 
+      },
+    },
+    // ===========================================
   },
 });

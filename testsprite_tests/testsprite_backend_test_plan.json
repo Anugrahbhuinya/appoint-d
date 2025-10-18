@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "verify user registration with valid and invalid data",
+    "description": "Test the /api/register endpoint to ensure it successfully registers a new user with valid data, and returns appropriate error responses for invalid data or duplicate username/email."
+  },
+  {
+    "id": "TC002",
+    "title": "verify user login with correct and incorrect credentials",
+    "description": "Test the /api/login endpoint to confirm successful login with correct credentials and proper error response when authentication fails."
+  },
+  {
+    "id": "TC003",
+    "title": "verify user logout functionality",
+    "description": "Test the /api/logout endpoint to ensure users can successfully log out and receive confirmation."
+  },
+  {
+    "id": "TC004",
+    "title": "verify fetching current user information",
+    "description": "Test the /api/user GET endpoint to verify it returns the current authenticated user's information and returns an error if not authenticated."
+  },
+  {
+    "id": "TC005",
+    "title": "verify doctor profile retrieval and update with authorization",
+    "description": "Test the /api/doctor/profile GET and PUT endpoints to ensure doctors can retrieve and update their profiles with valid data, and unauthorized or unauthenticated access is properly handled."
+  },
+  {
+    "id": "TC006",
+    "title": "verify doctor search with filters",
+    "description": "Test the /api/doctors GET endpoint to confirm it returns a filtered list of doctors based on query parameters like specialization, location, and consultation fee range."
+  },
+  {
+    "id": "TC007",
+    "title": "verify appointment creation and retrieval",
+    "description": "Test the /api/appointments POST and GET endpoints to ensure authenticated users can create new appointments with valid data and retrieve their appointment list."
+  },
+  {
+    "id": "TC008",
+    "title": "verify payment order creation and verification",
+    "description": "Test the /api/payments/create-order and /api/payments/verify POST endpoints to validate payment order creation with Razorpay and payment verification process including error handling."
+  },
+  {
+    "id": "TC009",
+    "title": "verify profile picture upload with image processing",
+    "description": "Test the /api/upload/profile-picture POST endpoint to ensure authenticated users can upload profile pictures with optional cropping and nudging, and proper error responses are returned for missing images."
+  },
+  {
+    "id": "TC010",
+    "title": "verify admin panel access and data retrieval",
+    "description": "Test the /api/admin/users and /api/admin/doctors GET endpoints to confirm only authenticated admins can access user and doctor lists, and unauthorized access is denied."
+  }
+]
