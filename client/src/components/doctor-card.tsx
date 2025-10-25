@@ -1,33 +1,40 @@
-import { Link } from "wouter";
+import { forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Clock, Video, MessageCircle } from "lucide-react";
 
-interface DoctorCardProps {
-  doctor: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    profile: {
-      specialization: string;
-      experience: number;
-      consultationFee: number;
-      bio: string;
-      rating: number;
-      totalReviews: number;
-      isApproved: boolean;
-    };
+interface Doctor {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  profile: {
+    specialization: string;
+    experience: number;
+    consultationFee: number;
+    bio: string;
+    rating: number;
+    totalReviews: number;
+    isApproved: boolean;
   };
 }
 
-export default function DoctorCard({ doctor }: DoctorCardProps) {
+interface DoctorCardProps {
+  doctor: Doctor;
+  onBookAppointment?: (doctor: Doctor) => void;  // 🛑 FIX: Pass doctor as parameter
+}
+
+const DoctorCard = forwardRef<HTMLDivElement, DoctorCardProps>(({ doctor, onBookAppointment }, ref) => {
   const avatarInitials = `${doctor.firstName?.[0] || ''}${doctor.lastName?.[0] || ''}`;
   const rating = doctor.profile.rating ? (doctor.profile.rating / 10).toFixed(1) : "N/A";
 
+  console.log("🏥 [DOCTOR CARD RENDERED]");
+  console.log("   Doctor:", doctor);
+  console.log("   Has callback:", !!onBookAppointment);
+
   return (
-    <Card className="hover:shadow-lg transition-shadow duration-200" data-testid={`card-doctor-${doctor.id}`}>
+    <Card className="hover:shadow-lg transition-shadow duration-200" data-testid={`card-doctor-${doctor.id}`} ref={ref}>
       <CardContent className="p-6">
         <div className="flex items-start space-x-4">
           <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
@@ -78,13 +85,33 @@ export default function DoctorCard({ doctor }: DoctorCardProps) {
             </div>
 
             <div className="flex space-x-2">
-              <Button className="flex-1" data-testid={`button-book-appointment-${doctor.id}`}>
+              <Button 
+                className="flex-1" 
+                data-testid={`button-book-appointment-${doctor.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log("📱 [BOOK BUTTON CLICKED]");
+                  console.log("   Doctor ID:", doctor.id);
+                  console.log("   Calling callback with doctor:", doctor);
+                  onBookAppointment?.(doctor);  // 🛑 FIX: Pass doctor to callback
+                }}
+              >
                 Book Appointment
               </Button>
-              <Button variant="outline" size="sm" data-testid={`button-video-${doctor.id}`}>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                data-testid={`button-video-${doctor.id}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <Video className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="sm" data-testid={`button-chat-${doctor.id}`}>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                data-testid={`button-chat-${doctor.id}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MessageCircle className="w-4 h-4" />
               </Button>
             </div>
@@ -93,4 +120,8 @@ export default function DoctorCard({ doctor }: DoctorCardProps) {
       </CardContent>
     </Card>
   );
-}
+});
+
+DoctorCard.displayName = "DoctorCard";
+
+export default DoctorCard;

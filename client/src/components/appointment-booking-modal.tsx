@@ -1,17 +1,16 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useState, useMemo, useEffect } from "react";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea"; 
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Calendar as CalendarIcon, Clock, Video, User, CreditCard } from "lucide-react";
-import { format } from "date-fns";
+import { Clock, Video, User, CreditCard, Calendar as CalendarIcon } from "lucide-react";
+import { format, getISODay } from "date-fns"; 
 
 interface Doctor {
   id: string;
@@ -24,18 +23,55 @@ interface Doctor {
 }
 
 interface AppointmentBookingModalProps {
-  doctor: Doctor;
-  children: React.ReactNode;
+  doctor: Doctor | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export default function AppointmentBookingModal({ doctor, children }: AppointmentBookingModalProps) {
-  const [open, setOpen] = useState(false);
+interface DoctorAvailability {
+    _id: string;
+    doctorId: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    isAvailable: boolean;
+}
+
+const isSameDay = (date1: Date, date2: Date) => 
+  date1.getFullYear() === date2.getFullYear() &&
+  date1.getMonth() === date2.getMonth() &&
+  date1.getDate() === date2.getDate();
+
+export default function AppointmentBookingModal({ doctor, open, onOpenChange }: AppointmentBookingModalProps) {
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState("");
   const [appointmentType, setAppointmentType] = useState<"video" | "in-person">("video");
   const [notes, setNotes] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  const doctorId = doctor?.id;
+  const isDoctorReady = !!doctorId;
+  
+  useEffect(() => {
+    console.log("🏥 [DOCTOR INFO]");
+    console.log("   doctor prop:", doctor);
+    console.log("   doctorId:", doctorId);
+    console.log("   isDoctorReady:", isDoctorReady);
+  }, [doctor, doctorId, isDoctorReady]);
+
+  useEffect(() => {
+    setSelectedTime("");
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedDate(undefined);
+      setSelectedTime("");
+      setAppointmentType("video");
+      setNotes("");
+    }
+  }, [open]);
 
   interface AppointmentData {
     doctorId: string;
@@ -45,11 +81,149 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
     consultationFee: number;
     notes: string;
   }
+  
+  const { data: doctorAvailability = [], isLoading, error: availabilityError } = useQuery<DoctorAvailability[]>({
+    queryKey: ["/api/doctor/availability", doctorId, selectedDate], 
+    queryFn: async () => {
+      console.log("🔄 [FETCH AVAILABILITY - QUERY RUNNING]");
+      console.log("   isDoctorReady:", isDoctorReady);
+      console.log("   selectedDate:", selectedDate);
+      console.log("   doctorId:", doctorId);
+      
+      if (!isDoctorReady || !selectedDate) {
+        console.warn("⚠️  Early return - missing doctor or date");
+        console.warn("     isDoctorReady:", isDoctorReady, "selectedDate:", selectedDate);
+        return [];
+      }
+      
+      const dayOfWeek = getISODay(selectedDate);
+      const url = `/api/doctor/availability?doctorId=${doctorId}&dayOfWeek=${dayOfWeek}`;
+      
+      console.log("📍 FULL URL:", url);
+      console.log("   Doctor ID value:", doctorId);
+      console.log("   Date:", format(selectedDate, "PPP"));
+      console.log("   ISO Day value:", dayOfWeek);
+      
+      try {
+        console.log("📡 Making API request to:", url);
+        const res = await apiRequest("GET", url);
+        
+        console.log("📥 Response received - Status:", res.status, res.statusText);
+        
+        if (!res.ok) {
+          console.error("❌ HTTP Error:", res.status);
+          const errorText = await res.text();
+          console.error("   Response body:", errorText);
+          throw new Error(`HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        console.log("✅ Raw response data:", data);
+        console.log("✅ Got slots:", data.length, "items");
+        
+        if (!Array.isArray(data)) {
+          console.warn("⚠️  Data is not an array:", typeof data);
+          return [];
+        }
+        
+        if (data.length === 0) {
+          console.warn("⚠️  Empty array returned - doctor has no availability set!");
+        }
+        
+        data.forEach((slot: DoctorAvailability, i: number) => {
+          console.log(`   [${i+1}] Day: ${slot.dayOfWeek}, Time: ${slot.startTime}-${slot.endTime}, Available: ${slot.isAvailable}`);
+        });
+        
+        return data;
+      } catch (err: any) {
+        console.error("❌ Fetch error:", err.message);
+        console.error("   Full error:", err);
+        throw err;
+      }
+    },
+    enabled: open && isDoctorReady && !!selectedDate, 
+  });
+  
+  useEffect(() => {
+    console.log("📊 useQuery state changed:");
+    console.log("   isLoading:", isLoading);
+    console.log("   data length:", doctorAvailability.length);
+    console.log("   error:", availabilityError);
+    console.log("   enabled:", open && isDoctorReady && !!selectedDate);
+  }, [isLoading, doctorAvailability, availabilityError, open, isDoctorReady, selectedDate]);
+  
+  const timeSlots = useMemo(() => {
+    if (!selectedDate) return [];
+
+    const dayIndexToMatch = getISODay(selectedDate);
+    
+    console.log("🔍 [FILTER TIME SLOTS]");
+    console.log("   Looking for ISO day:", dayIndexToMatch);
+    console.log("   Available slots:", doctorAvailability.length);
+    
+    const availableSlots = doctorAvailability.filter(
+      slot => slot.dayOfWeek === dayIndexToMatch && slot.isAvailable
+    );
+
+    console.log("   Matching slots:", availableSlots.length);
+
+    if (availableSlots.length === 0) {
+      console.warn("   ⚠️ No available slots for this day");
+      return [];
+    } 
+    
+    const generatedSlots: string[] = [];
+
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        
+        const isInAvailableSlot = availableSlots.some(slot => {
+          return timeStr >= slot.startTime && timeStr < slot.endTime;
+        });
+        
+        if (isInAvailableSlot) {
+          generatedSlots.push(timeStr);
+        }
+      }
+    }
+    
+    console.log("   Generated slots:", generatedSlots.length, generatedSlots.slice(0, 5));
+    
+    if (isSameDay(selectedDate, new Date())) {
+      const currentTime = format(new Date(), 'HH:mm');
+      const filtered = generatedSlots.filter(time => time > currentTime);
+      console.log("   Filtered past times (current:", currentTime + "), kept:", filtered.length);
+      return filtered;
+    }
+
+    return generatedSlots;
+
+  }, [selectedDate, doctorAvailability]);
+  
+  useEffect(() => {
+    if (timeSlots.length > 0 && selectedTime === "") {
+      setSelectedTime(timeSlots[0]);
+      console.log("✅ Auto-selected:", timeSlots[0]);
+    }
+  }, [timeSlots, selectedTime]);
 
   const bookAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: AppointmentData) => {
+      console.log("📤 [BOOKING APPOINTMENT]");
+      console.log("   Data:", appointmentData);
+      
       const res = await apiRequest("POST", "/api/appointments", appointmentData);
-      return res.json();
+      
+      if (!res.ok) {
+        console.error("❌ Booking failed:", res.status);
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Booking failed");
+      }
+      
+      const result = await res.json();
+      console.log("✅ Booking successful!");
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
@@ -57,12 +231,7 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
         title: "Appointment Booked",
         description: "Your appointment has been scheduled successfully.",
       });
-      setOpen(false);
-      // Reset form
-      setSelectedDate(undefined);
-      setSelectedTime("");
-      setAppointmentType("video");
-      setNotes("");
+      onOpenChange(false);
     },
     onError: (error: Error) => {
       toast({
@@ -73,8 +242,24 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
     },
   });
 
+  useEffect(() => {
+    console.log("📋 [QUERY ENABLED STATE]");
+    console.log("   open:", open);
+    console.log("   isDoctorReady:", isDoctorReady);
+    console.log("   selectedDate:", selectedDate);
+    console.log("   Should enable query?", open && isDoctorReady && !!selectedDate);
+  }, [open, isDoctorReady, selectedDate]);
+
+  if (!doctor) {
+    console.warn("⚠️  No doctor prop provided!");
+    return null;
+  }
+  
   const handleBookAppointment = () => {
-    if (!selectedDate || !selectedTime) {
+    console.log("🚀 [BOOKING INITIATED]");
+    
+    if (!doctor || !selectedDate || !selectedTime) {
+      console.error("❌ Missing info");
       toast({
         title: "Missing Information",
         description: "Please select a date and time for your appointment.",
@@ -87,8 +272,8 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
     const [hours, minutes] = selectedTime.split(':').map(Number);
     appointmentDateTime.setHours(hours, minutes, 0, 0);
 
-    const appointmentData = {
-      doctorId: doctor.id,
+    const appointmentData: AppointmentData = {
+      doctorId: doctorId!,
       appointmentDate: appointmentDateTime.toISOString(),
       duration: 30,
       type: appointmentType,
@@ -99,30 +284,17 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
     bookAppointmentMutation.mutate(appointmentData);
   };
 
-  const generateTimeSlots = () => {
-    const slots = [];
-    for (let hour = 9; hour <= 17; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        slots.push(timeString);
-      }
-    }
-    return slots;
-  };
-
-  const timeSlots = generateTimeSlots();
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <CalendarIcon className="w-5 h-5 mr-2" />
             Book Appointment with Dr. {doctor.firstName} {doctor.lastName}
           </DialogTitle>
+          <DialogDescription>
+            Schedule a {appointmentType === "video" ? "video consultation" : "in-person visit"}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -142,7 +314,7 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
             </div>
           </div>
 
-          {/* Appointment Details */}
+          {/* Date & Time Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="date">Select Date</Label>
@@ -170,16 +342,30 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
 
             <div>
               <Label htmlFor="time">Select Time</Label>
-              <Select value={selectedTime} onValueChange={setSelectedTime}>
+              <Select 
+                value={selectedTime} 
+                onValueChange={setSelectedTime}
+                disabled={!selectedDate || timeSlots.length === 0 || isLoading}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select time" />
+                  <SelectValue placeholder={
+                        isLoading ? "Loading slots..." : 
+                        !selectedDate ? "Select a date first" : 
+                        timeSlots.length === 0 ? "No slots available" : "Select time"
+                    } />
                 </SelectTrigger>
-                <SelectContent>
-                  {timeSlots.map((time) => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
+                <SelectContent className="max-h-[200px] overflow-y-auto">
+                  {timeSlots.length > 0 ? (
+                    timeSlots.map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-sm text-muted-foreground px-4">
+                      {!selectedDate ? "Pick a date to see available slots" : "No slots available"}
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -187,23 +373,13 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
 
           <div>
             <Label htmlFor="type">Appointment Type</Label>
-            <Select value={appointmentType} onValueChange={setAppointmentType}>
+            <Select value={appointmentType} onValueChange={(value: "video" | "in-person") => setAppointmentType(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="video">
-                  <div className="flex items-center">
-                    <Video className="w-4 h-4 mr-2" />
-                    Video Consultation
-                  </div>
-                </SelectItem>
-                <SelectItem value="in-person">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 mr-2" />
-                    In-Person Visit
-                  </div>
-                </SelectItem>
+                <SelectItem value="video">Video Consultation</SelectItem>
+                <SelectItem value="in-person">In-Person Visit</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -212,10 +388,10 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
             <Label htmlFor="notes">Additional Notes (Optional)</Label>
             <Textarea
               id="notes"
-              placeholder="Any specific concerns or questions you'd like to discuss..."
+              placeholder="Any specific concerns..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={3}
+              rows={2}
             />
           </div>
 
@@ -224,29 +400,26 @@ export default function AppointmentBookingModal({ doctor, children }: Appointmen
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Consultation Fee</p>
-                <p className="text-sm text-muted-foreground">
-                  {appointmentType === "video" ? "Video Consultation" : "In-Person Visit"}
-                </p>
+                <p className="text-sm text-muted-foreground">30 minutes</p>
               </div>
               <div className="text-right">
                 <p className="font-semibold">₹{doctor.profile.consultationFee}</p>
-                <p className="text-sm text-muted-foreground">30 minutes</p>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {/* Buttons */}
           <div className="flex space-x-3">
             <Button
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               className="flex-1"
             >
               Cancel
             </Button>
             <Button
               onClick={handleBookAppointment}
-              disabled={bookAppointmentMutation.isPending || !selectedDate || !selectedTime}
+              disabled={bookAppointmentMutation.isPending || !selectedDate || !selectedTime || isLoading}
               className="flex-1"
             >
               <CreditCard className="w-4 h-4 mr-2" />
