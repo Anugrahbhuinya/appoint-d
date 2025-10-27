@@ -25,7 +25,9 @@ import {
   AlertCircle,
   DollarSign,
   Star,
-  TrendingUp
+  TrendingUp,
+  Camera,
+  X
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +47,7 @@ interface DoctorProfile {
   isApproved: boolean;
   rating: number;
   totalReviews: number;
+  profilePicture?: string;
 }
 
 interface Appointment {
@@ -62,9 +65,14 @@ interface Appointment {
 
 type ProfileFormData = z.infer<typeof insertDoctorProfileSchema>;
 
+type ProfileFormDataWithPicture = ProfileFormData & { profilePicture?: string };
+
 export default function DoctorPortal() {
   const { user, logoutMutation } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
+  const [isUploadingPic, setIsUploadingPic] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -78,7 +86,7 @@ export default function DoctorPortal() {
     </div>;
   }
 
-  const { data: profile, isLoading: profileLoading } = useQuery<DoctorProfile>({
+  const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery<DoctorProfile>({
     queryKey: ["/api/doctor/profile"],
   });
 
@@ -86,11 +94,14 @@ export default function DoctorPortal() {
     queryKey: ["/api/appointments"],
   });
 
-  const profileForm = useForm<ProfileFormData>({
-    resolver: zodResolver(insertDoctorProfileSchema.omit({ userId: true })),
+  const profileForm = useForm<ProfileFormDataWithPicture>({
+    resolver: zodResolver(insertDoctorProfileSchema.omit({ userId: true }).extend({ 
+      profilePicture: z.string().optional() 
+    })),
     defaultValues: profile ? {
       ...profile,
       qualifications: profile.qualifications || [],
+      profilePicture: profile.profilePicture || "",
     } : {
       specialization: "",
       experience: 0,
@@ -99,22 +110,129 @@ export default function DoctorPortal() {
       qualifications: [],
       hospitalAffiliation: "",
       licenseNumber: "",
+      profilePicture: "",
     },
   });
 
+  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      console.log('📸 File selected:', {
+        name: file.name,
+        type: file.type,
+        size: file.size
+      });
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select an image file",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please select an image under 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setProfilePicFile(file);
+      
+      // Read file as Data URL for preview
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        console.log('✅ Preview generated, size:', result.length);
+        setProfilePicPreview(result);
+      };
+      reader.onerror = () => {
+        console.error('❌ Failed to read file');
+        toast({
+          title: "Error",
+          description: "Failed to read file",
+          variant: "destructive",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeProfilePic = async () => {
+    try {
+      setProfilePicFile(null);
+      setProfilePicPreview(null);
+      profileForm.setValue("profilePicture", "");
+      
+      // Delete from database
+      const res = await fetch("/api/doctor/profile/picture/remove", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to remove picture');
+      }
+
+      const updated = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/doctor/profile"] });
+      
+      toast({
+        title: "Picture Removed",
+        description: "Your profile picture has been removed.",
+      });
+    } catch (error: any) {
+      console.error('Error removing picture:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove picture",
+        variant: "destructive",
+      });
+    }
+  };
+
   const createProfileMutation = useMutation({
-    mutationFn: async (data: ProfileFormData) => {
-      const res = await apiRequest("POST", "/api/doctor/profile", data);
+    mutationFn: async (data: ProfileFormDataWithPicture) => {
+      // Convert to JSON with Base64 picture
+      const payload = {
+        ...data,
+        profilePicture: data.profilePicture || null,
+      };
+
+      const res = await fetch("/api/doctor/profile", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || 'Failed to create profile');
+      }
+      
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/doctor/profile"] });
+      setProfilePicFile(null);
+      setProfilePicPreview(null);
       toast({
         title: "Profile Created",
         description: "Your doctor profile has been created successfully.",
       });
     },
     onError: (error: Error) => {
+      console.error("Profile creation error:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -124,18 +242,43 @@ export default function DoctorPortal() {
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: Partial<ProfileFormData>) => {
-      const res = await apiRequest("PUT", "/api/doctor/profile", data);
-      return res.json();
+    mutationFn: async (data: Partial<ProfileFormDataWithPicture>) => {
+      const payload = {
+        ...data,
+        profilePicture: data.profilePicture || null,
+      };
+
+      setIsUploadingPic(true);
+      try {
+        const res = await fetch("/api/doctor/profile", {
+          method: "PUT",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!res.ok) {
+          const error = await res.text();
+          throw new Error(error || 'Failed to update profile');
+        }
+        
+        return res.json();
+      } finally {
+        setIsUploadingPic(false);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/doctor/profile"] });
+      setProfilePicFile(null);
+      setProfilePicPreview(null);
       toast({
         title: "Profile Updated",
         description: "Your profile has been updated successfully.",
       });
     },
     onError: (error: Error) => {
+      console.error("Profile update error:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -144,11 +287,17 @@ export default function DoctorPortal() {
     },
   });
 
-  const onProfileSubmit = (data: ProfileFormData) => {
+  const onProfileSubmit = (data: ProfileFormDataWithPicture) => {
+    // Add the Base64 preview to the data
+    const dataWithPicture = {
+      ...data,
+      profilePicture: profilePicPreview || data.profilePicture,
+    };
+
     if (profile) {
-      updateProfileMutation.mutate(data);
+      updateProfileMutation.mutate(dataWithPicture);
     } else {
-      createProfileMutation.mutate(data);
+      createProfileMutation.mutate(dataWithPicture);
     }
   };
 
@@ -183,6 +332,8 @@ export default function DoctorPortal() {
     </div>;
   }
 
+  const displayPictureUrl = profilePicPreview || profile?.profilePicture;
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -193,16 +344,27 @@ export default function DoctorPortal() {
           <div className="p-6">
             <div className="mb-8">
               <div className="flex items-center space-x-3 mb-2">
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="text-primary font-semibold">
-                    {user.firstName?.[0]}{user.lastName?.[0]}
-                  </span>
+                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {profile?.profilePicture ? (
+                    <img 
+                      src={profile.profilePicture} 
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                      onError={() => {
+                        console.warn("Failed to load profile picture from database");
+                      }}
+                    />
+                  ) : (
+                    <span className="text-primary font-semibold text-sm">
+                      {user.firstName?.[0]}{user.lastName?.[0]}
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <h3 className="font-semibold" data-testid="text-doctor-name">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold truncate" data-testid="text-doctor-name">
                     Dr. {user.firstName} {user.lastName}
                   </h3>
-                  <p className="text-sm text-muted-foreground" data-testid="text-specialization">
+                  <p className="text-sm text-muted-foreground truncate" data-testid="text-specialization">
                     {profile?.specialization || "Complete your profile"}
                   </p>
                 </div>
@@ -383,7 +545,73 @@ export default function DoctorPortal() {
                 <p className="text-muted-foreground">Manage your professional information</p>
               </div>
 
-              <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
+              <div className="space-y-6">
+                {/* Profile Picture Upload */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Profile Picture</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center space-x-6">
+                      <div className="w-32 h-32 bg-primary/10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {displayPictureUrl ? (
+                          <img 
+                            src={displayPictureUrl} 
+                            alt="Profile preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error("Failed to load preview image");
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="text-center">
+                            <Camera className="w-8 h-8 text-primary/60 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">No image</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1">
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="profilePic" className="cursor-pointer">
+                              <div className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-primary/30 rounded-lg hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                                <Upload className="w-4 h-4 mr-2" />
+                                <span className="text-sm font-medium">Click to upload</span>
+                              </div>
+                              <input
+                                id="profilePic"
+                                type="file"
+                                accept="image/*"
+                                onChange={handleProfilePicChange}
+                                className="hidden"
+                                data-testid="input-profile-pic"
+                                disabled={isUploadingPic}
+                              />
+                            </Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
+                          {(displayPictureUrl) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={removeProfilePic}
+                              data-testid="button-remove-pic"
+                              disabled={isUploadingPic}
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Remove Image
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Professional Information */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Professional Information</CardTitle>
@@ -465,18 +693,19 @@ export default function DoctorPortal() {
                     </div>
 
                     <Button
-                      type="submit"
-                      disabled={createProfileMutation.isPending || updateProfileMutation.isPending}
+                      type="button"
+                      onClick={() => onProfileSubmit(profileForm.getValues())}
+                      disabled={createProfileMutation.isPending || updateProfileMutation.isPending || isUploadingPic}
                       data-testid="button-save-profile"
                     >
-                      {createProfileMutation.isPending || updateProfileMutation.isPending
+                      {createProfileMutation.isPending || updateProfileMutation.isPending || isUploadingPic
                         ? "Saving..." 
                         : profile ? "Update Profile" : "Create Profile"
                       }
                     </Button>
                   </CardContent>
                 </Card>
-              </form>
+              </div>
             </div>
           )}
 

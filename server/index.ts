@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import path from "path";
+import fs from "fs/promises";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
@@ -66,9 +68,32 @@ app.use('/api/upload', uploadLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
+// ============================================
+// IMPORTANT: SERVE STATIC FILES BEFORE ROUTES
+// This ensures file requests are handled before
+// the catch-all route in registerRoutes
+// ============================================
+
+// Create uploads directories if they don't exist
+(async () => {
+  try {
+    await fs.mkdir(path.join(process.cwd(), 'public', 'uploads', 'doctor-profiles'), { recursive: true });
+    await fs.mkdir(path.join(process.cwd(), 'uploads'), { recursive: true });
+    console.log('✅ Upload directories ready');
+  } catch (error) {
+    console.error('❌ Failed to create upload directories:', error);
+  }
+})();
+
+// Serve static files - MUST be before registerRoutes
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// ============================================
+
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const pathStr = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -79,16 +104,14 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (pathStr.startsWith("/api")) {
+      let logLine = `${req.method} ${pathStr} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       if (logLine.length > 80) {
         logLine = logLine.slice(0, 79) + "…";
       }
-
       log(logLine);
     }
   });
@@ -97,34 +120,45 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Connect to MongoDB
-  await storage.connect();
+  try {
+    // Connect to MongoDB
+    console.log('🔄 Connecting to MongoDB...');
+    await storage.connect();
+    console.log('✅ MongoDB connected');
 
-  const server = await registerRoutes(app);
+    // Register API routes
+    console.log('📝 Registering routes...');
+    const server = await registerRoutes(app);
+    console.log('✅ Routes registered');
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    // Global error handler
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+      console.error('❌ Error:', message);
+      res.status(status).json({ message });
+      throw err;
+    });
 
-    res.status(status).json({ message });
-    throw err;
-  });
+    // Setup Vite or static serving
+    if (app.get("env") === "development") {
+      console.log('🚀 Setting up Vite for development...');
+      await setupVite(app, server);
+    } else {
+      console.log('📦 Serving static files for production...');
+      serveStatic(app);
+    }
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+    // Start server
+    const port = parseInt(process.env.PORT || "5000", 10);
+    server.listen(port, "127.0.0.1", () => {
+      log(`✅ Server running on http://localhost:${port}`);
+      log(`📁 Uploads served from: /uploads/doctor-profiles/`);
+      log(`📂 Static files from: ${path.join(process.cwd(), 'public', 'uploads')}`);
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
   }
-
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(port, "127.0.0.1", () => {
-    log(`serving on port ${port}`);
-  });
 })();

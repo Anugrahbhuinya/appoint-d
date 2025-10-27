@@ -24,6 +24,8 @@ import {
   sanitizeObjectId,
   // All security-utils imports removed as they are unused in the final logic below
 } from "./security-utils";
+// NEW IMPORTS FOR DOCTOR PROFILE UPLOAD
+import fs from 'fs/promises'; 
 
 // Razorpay setup
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
@@ -40,7 +42,7 @@ const razorpay =
       })
     : null;
 
-// File upload setup
+// File upload setup (General)
 const upload = multer({
   dest: "uploads/",
   limits: {
@@ -58,6 +60,83 @@ const upload = multer({
     }
   },
 });
+
+// NEW MULTER CONFIG FOR DOCTOR PROFILE PICTURES
+const profilePicUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(process.cwd(), 'public', 'uploads', 'doctor-profiles');
+      // Create directory synchronously
+      try {
+        if (!require('fs').existsSync(dir)) {
+          require('fs').mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
+      } catch (err: any) {
+        console.error('Failed to create directory:', err);
+        cb(err);
+      }
+    },
+    filename: (req, file, cb) => {
+      // IMPORTANT: Get the file extension from originalname
+      const ext = path.extname(file.originalname).toLowerCase();
+      console.log('File extension:', ext);
+      
+      // If no extension, infer from mimetype
+      let finalExt = ext;
+      if (!finalExt) {
+        const mimeToExt: { [key: string]: string } = {
+          'image/jpeg': '.jpg',
+          'image/png': '.png',
+          'image/gif': '.gif',
+          'image/webp': '.webp',
+        };
+        finalExt = mimeToExt[file.mimetype] || '.jpg';
+        console.log('Inferred extension:', finalExt);
+      }
+      
+      // Generate unique filename with extension
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const filename = `${uniqueSuffix}${finalExt}`;
+      
+      console.log('Final filename:', filename);
+      cb(null, filename);
+    }
+  }),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max
+  },
+  fileFilter: (req, file, cb) => {
+    console.log('📸 [Multer fileFilter] Checking file:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size
+    });
+
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      console.log('  ✅ File allowed');
+      cb(null, true);
+    } else {
+      console.log('  ❌ File rejected - invalid MIME type');
+      cb(new Error('Only image files are allowed (JPEG, PNG, GIF, WebP)'));
+    }
+  },
+});
+
+
+// Ensure uploads directory exists for doctor profiles
+(async () => {
+  try {
+    await fs.mkdir('public/uploads/doctor-profiles', { recursive: true });
+    console.log('✅ Doctor profiles upload directory ready');
+  } catch (error) {
+    console.error('❌ Failed to create upload directory:', error);
+  }
+})();
+// END NEW MULTER CONFIG
+
 const convertIsoToJsDay = (isoDay: number): number => {
   // ISO: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun
   // JS:  1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 0=Sun
@@ -77,6 +156,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // === STATIC FILE SERVING FOR DOWNLOADS ===
   // Expose the 'uploads' folder for public access (for document downloads)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  // NEW: Expose the public/uploads folder for profile pictures
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'))); 
   // =========================================
 
 
@@ -154,7 +235,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   // ========================================================
 
-  // === PROFILE PICTURE UPLOAD (Doctor & Patient) ===
+  // === PROFILE PICTURE UPLOAD (Doctor & Patient) - EXISTING LOGIC REMOVED/REPLACED ===
+  // The old /api/upload/profile-picture route is for generic profile picture uploads, 
+  // which for doctors is now replaced by the new POST/PUT /api/doctor/profile routes.
+  // Retaining the general one for non-doctors/patients if needed, but the original
+  // logic for doctor profile picture is now in the dedicated Doctor Profile Routes.
   app.post("/api/upload/profile-picture", upload.single("image"), async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -196,30 +281,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   // ========================================================
 
-  // Doctor Profile Routes
-  app.post("/api/doctor/profile", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
+  // --------------------------------------------------------
+  // === NEW DOCTOR PROFILE ROUTES WITH FILE UPLOAD ===
+  // --------------------------------------------------------
 
-      if (req.user!.role !== "doctor") {
-        return res.status(403).json({ message: "Doctor access required" });
-      }
+  // POST /api/doctor/profile - Create profile with picture
+app.post("/api/doctor/profile", async (req, res) => {
+  try {
+    console.log('\n====== [POST /api/doctor/profile] ======');
 
-      const validatedData = insertDoctorProfileSchema.parse({
-        ...req.body,
-        // FIX: Ensure ID is a string for Zod validation
-        userId: req.user!._id.toString(), 
-      });
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
 
-      const profile = await storage.createDoctorProfile(validatedData);
-      res.status(201).json(profile);
-    } catch (error: any) {
-      console.error("POST /api/doctor/profile failed:", error); // Log error
-      res.status(400).json({ message: error.message });
-    }
-  });
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
+
+    const userId = req.user!._id.toString();
+    const {
+      specialization,
+      experience,
+      consultationFee,
+      bio,
+      qualifications,
+      hospitalAffiliation,
+      licenseNumber,
+      profilePicture, // Base64 data URL
+    } = req.body;
+
+    if (profilePicture) {
+      console.log('📸 Profile picture: ' + (profilePicture.length / 1024).toFixed(2) + ' KB');
+    }
+
+    let parsedQualifications: string[] = [];
+    if (qualifications) {
+      try {
+        parsedQualifications = typeof qualifications === 'string' 
+          ? JSON.parse(qualifications) 
+          : qualifications;
+      } catch (e) {
+        parsedQualifications = [];
+      }
+    }
+
+    const validatedData = insertDoctorProfileSchema.parse({
+      userId,
+      specialization,
+      experience: parseInt(experience) || 0,
+      consultationFee: parseFloat(consultationFee) || 0,
+      bio: bio || '',
+      qualifications: parsedQualifications,
+      hospitalAffiliation: hospitalAffiliation || '',
+      licenseNumber: licenseNumber || '',
+      isApproved: false,
+      rating: 0,
+      totalReviews: 0,
+    });
+
+    const profile = await storage.createDoctorProfile(validatedData);
+
+    if (profilePicture) {
+      const updatedProfile = await storage.updateDoctorProfile(userId, {
+        profilePicture,
+      });
+      console.log('✅ Profile created with picture');
+      return res.status(201).json(updatedProfile);
+    }
+
+    console.log('✅ Profile created without picture');
+    res.status(201).json(profile);
+  } catch (error: any) {
+    console.error("POST /api/doctor/profile failed:", error);
+    res.status(400).json({ message: error.message || "Failed to create doctor profile" });
+  }
+});
+
 
   app.get("/api/doctor/profile", async (req, res) => {
     try {
@@ -244,7 +381,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/doctor/profile", async (req, res) => {
+//profile debug routes
+
+app.get("/api/debug/uploads", async (req, res) => {
+  try {
+    const uploadsPath = path.join(process.cwd(), 'public', 'uploads', 'doctor-profiles');
+    const exists = await fs.stat(uploadsPath).then(() => true).catch(() => false);
+    
+    let files: string[] = [];
+    if (exists) {
+      files = await fs.readdir(uploadsPath);
+    }
+
+    res.json({
+      uploadsPath,
+      exists,
+      files: files.slice(0, 10), // First 10 files
+      fileCount: files.length,
+      serverUrl: `${req.protocol}://${req.hostname}:${req.socket.localPort || 5000}`
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+  // PUT /api/doctor/profile - Update profile with optional picture
+app.put("/api/doctor/profile", async (req, res) => {
+  try {
+    console.log('\n====== [PUT /api/doctor/profile] ======');
+    console.log('Body keys:', Object.keys(req.body));
+
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
+
+    const userId = req.user!._id.toString();
+    
+    const currentProfile = await storage.getDoctorProfile(userId);
+    
+    if (!currentProfile) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+
+    const {
+      specialization,
+      experience,
+      consultationFee,
+      bio,
+      qualifications,
+      hospitalAffiliation,
+      licenseNumber,
+      profilePicture, // This will be a Base64 data URL like "data:image/jpeg;base64,..."
+    } = req.body;
+
+    if (profilePicture) {
+      console.log('📸 Profile picture provided');
+      console.log('   Type: Base64 Data URL');
+      console.log('   Size: ' + (profilePicture.length / 1024).toFixed(2) + ' KB');
+    }
+
+    let parsedQualifications = currentProfile.qualifications;
+    if (qualifications) {
+      try {
+        parsedQualifications = typeof qualifications === 'string' 
+          ? JSON.parse(qualifications) 
+          : qualifications;
+      } catch (e) {
+        console.error('Failed to parse qualifications:', e);
+      }
+    }
+
+    const updates: any = {
+      specialization: specialization || currentProfile.specialization,
+      experience: experience ? parseInt(experience) : currentProfile.experience,
+      consultationFee: consultationFee ? parseFloat(consultationFee) : currentProfile.consultationFee,
+      bio: bio || currentProfile.bio,
+      qualifications: parsedQualifications,
+      hospitalAffiliation: hospitalAffiliation || currentProfile.hospitalAffiliation,
+      licenseNumber: licenseNumber || currentProfile.licenseNumber,
+    };
+
+    // Store Base64 directly in database
+    if (profilePicture) {
+      updates.profilePicture = profilePicture;
+      console.log('✅ Profile picture will be saved as Base64 data URL');
+    }
+
+    console.log('💾 Updating profile in database...');
+    const updatedProfile = await storage.updateDoctorProfile(userId, updates);
+    
+    console.log('✅ Profile updated successfully');
+    console.log('   Picture stored: ' + (updatedProfile.profilePicture ? 'Yes' : 'No'));
+    console.log('=====================================\n');
+    
+    res.json(updatedProfile);
+  } catch (error: any) {
+    console.error("❌ Error updating profile:", error.message);
+    console.error("Stack:", error.stack);
+    res.status(400).json({ message: error.message || "Failed to update doctor profile" });
+  }
+});
+
+// POST /api/doctor/profile/picture/remove - Remove profile picture
+app.post("/api/doctor/profile/picture/remove", async (req, res) => {
+  try {
+    console.log('\n====== [POST /api/doctor/profile/picture/remove] ======');
+
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
+
+    const userId = req.user!._id.toString();
+    const profile = await storage.getDoctorProfile(userId);
+    
+    if (!profile) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+
+    if (!profile.profilePicture) {
+      return res.status(400).json({ message: "No profile picture to delete" });
+    }
+
+    console.log('🗑️ Removing profile picture...');
+    console.log('   Current picture size:', (profile.profilePicture.length / 1024).toFixed(2), 'KB');
+
+    // Update profile to remove picture
+    const updatedProfile = await storage.updateDoctorProfile(userId, {
+      profilePicture: undefined,
+    });
+
+    console.log('✅ Profile picture removed');
+    console.log('=====================================\n');
+
+    res.json(updatedProfile);
+  } catch (error: any) {
+    console.error("❌ Error removing picture:", error.message);
+    res.status(400).json({ message: error.message || "Failed to remove profile picture" });
+  }
+});
+
+  // DELETE /api/doctor/profile/picture - Delete profile picture
+  app.delete("/api/doctor/profile/picture", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
@@ -254,18 +538,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Doctor access required" });
       }
 
-      const updates = req.body;
-      delete updates.userId; // Prevent userId changes
-      delete updates._id; // Prevent _id changes
+      const userId = req.user!._id.toString();
+      const profile = await storage.getDoctorProfile(userId);
+      
+      if (!profile) {
+        return res.status(404).json({ message: "Doctor profile not found" });
+      }
 
-      // FIX: Ensure ID is a string when calling storage
-      const profile = await storage.updateDoctorProfile(req.user!._id.toString(), updates);
-      res.json(profile);
+      if (!profile.profilePicture) {
+        return res.status(400).json({ message: "No profile picture to delete" });
+      }
+
+      // Delete file from storage
+      const picPath = path.join(process.cwd(), 'public', profile.profilePicture);
+      try {
+        await fs.unlink(picPath);
+        console.log('✅ Deleted profile picture:', picPath);
+      } catch (error) {
+        console.warn('⚠️ Could not delete profile picture file:', error);
+      }
+
+      // Update profile to remove picture URL
+      const updatedProfile = await storage.updateDoctorProfile(userId, {
+        profilePicture: undefined,
+      });
+
+      res.json(updatedProfile);
     } catch (error: any) {
-      console.error("PUT /api/doctor/profile failed:", error); // Log error
-      res.status(400).json({ message: error.message });
+      console.error("DELETE /api/doctor/profile/picture failed:", error);
+      res.status(500).json({ message: error.message || "Failed to delete profile picture" });
     }
   });
+  
+  // --------------------------------------------------------
+  // === END NEW DOCTOR PROFILE ROUTES ===
+  // --------------------------------------------------------
 
   // Doctor Search Routes
   app.get("/api/doctors", async (req, res) => {
@@ -331,118 +638,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // ===========================
 
 app.post("/api/doctor/availability", async (req, res) => {
-  try {
-    console.log("📝 [POST /api/doctor/availability]");
+  try {
+    console.log("📝 [POST /api/doctor/availability]");
 
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
 
-    if (req.user!.role !== "doctor") {
-      return res.status(403).json({ message: "Doctor access required" });
-    }
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
 
-    // Validate incoming ISO day (1-7)
-    const incomingDay = req.body.dayOfWeek;
-    if (incomingDay === undefined || incomingDay === null || incomingDay < 1 || incomingDay > 7) {
-      return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7)" });
-    }
+    // Validate incoming ISO day (1-7)
+    const incomingDay = req.body.dayOfWeek;
+    if (incomingDay === undefined || incomingDay === null || incomingDay < 1 || incomingDay > 7) {
+      return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7)" });
+    }
 
-    console.log("   Incoming day (ISO):", incomingDay);
+    console.log("   Incoming day (ISO):", incomingDay);
 
-    const availabilityData = insertDoctorAvailabilitySchema.parse({
-      ...req.body,
-      dayOfWeek: convertIsoToJsDay(incomingDay), // Convert ISO (1-7) to JS (0-6) for storage
-      doctorId: req.user!._id.toString(),
-    });
+    const availabilityData = insertDoctorAvailabilitySchema.parse({
+      ...req.body,
+      dayOfWeek: convertIsoToJsDay(incomingDay), // Convert ISO (1-7) to JS (0-6) for storage
+      doctorId: req.user!._id.toString(),
+    });
 
-    console.log("   Parsed data with JS day:", availabilityData.dayOfWeek);
+    console.log("   Parsed data with JS day:", availabilityData.dayOfWeek);
 
-    const availability = await storage.createDoctorAvailability(availabilityData);
+    const availability = await storage.createDoctorAvailability(availabilityData);
 
-    console.log("   Created availability:", availability);
+    console.log("   Created availability:", availability);
 
-    // 🛑 FIX: Check if toObject exists before calling (for safety)
-    const obj = availability.toObject ? availability.toObject() : availability;
-    
-    // Convert back to ISO for response
-    const response = {
-      ...obj,
-      dayOfWeek: convertJsDayToIso(obj.dayOfWeek)
-    };
+    // 🛑 FIX: Check if toObject exists before calling (for safety)
+    const obj = availability.toObject ? availability.toObject() : availability;
+    
+    // Convert back to ISO for response
+    const response = {
+      ...obj,
+      dayOfWeek: convertJsDayToIso(obj.dayOfWeek)
+    };
 
-    console.log("   Returning response with ISO day:", response.dayOfWeek);
-    res.status(201).json(response);
-  } catch (error: any) {
-    console.error("❌ POST /api/doctor/availability failed:", error);
-    console.error("   Stack:", error.stack);
-    res.status(400).json({ message: error.message });
-  }
+    console.log("   Returning response with ISO day:", response.dayOfWeek);
+    res.status(201).json(response);
+  } catch (error: any) {
+    console.error("❌ POST /api/doctor/availability failed:", error);
+    console.error("   Stack:", error.stack);
+    res.status(400).json({ message: error.message });
+  }
 });
 
 app.get("/api/doctor/availability", async (req, res) => {
-  try {
-    console.log("📖 [GET /api/doctor/availability]");
+  try {
+    console.log("📖 [GET /api/doctor/availability]");
 
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
 
-    // Support both doctor viewing own availability AND patients querying specific doctor
-    let doctorId: string;
-    let dayOfWeekParam = req.query.dayOfWeek as string | undefined;
+    // Support both doctor viewing own availability AND patients querying specific doctor
+    let doctorId: string;
+    let dayOfWeekParam = req.query.dayOfWeek as string | undefined;
 
-    if (req.user!.role === "doctor") {
-      doctorId = req.user!._id.toString();
-      console.log("   Doctor viewing own availability");
-    } else {
-      doctorId = req.query.doctorId as string;
-      if (!doctorId) {
-        return res.status(400).json({ message: "doctorId is required for non-doctors" });
-      }
-      console.log("   Non-doctor querying doctor:", doctorId);
-    }
+    if (req.user!.role === "doctor") {
+      doctorId = req.user!._id.toString();
+      console.log("   Doctor viewing own availability");
+    } else {
+      doctorId = req.query.doctorId as string;
+      if (!doctorId) {
+        return res.status(400).json({ message: "doctorId is required for non-doctors" });
+      }
+      console.log("   Non-doctor querying doctor:", doctorId);
+    }
 
-    let availability: any[];
+    let availability: any[];
 
-    if (dayOfWeekParam) {
-      // Single-day query
-      const isoDayOfWeek = parseInt(dayOfWeekParam, 10);
+    if (dayOfWeekParam) {
+      // Single-day query
+      const isoDayOfWeek = parseInt(dayOfWeekParam, 10);
 
-      if (isNaN(isoDayOfWeek) || isoDayOfWeek < 1 || isoDayOfWeek > 7) {
-        return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7)" });
-      }
+      if (isNaN(isoDayOfWeek) || isoDayOfWeek < 1 || isoDayOfWeek > 7) {
+        return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7)" });
+      }
 
-      console.log("   Single day query - ISO day:", isoDayOfWeek);
-      
-      // Storage returns plain objects, NO need to call .toObject()
-      availability = await storage.getDoctorAvailability(doctorId, isoDayOfWeek);
-      
-      console.log("   Got", availability.length, "slots from storage");
-      
-    } else {
-      // All-days query 
-      console.log("   All days query");
-      
-      // Storage returns plain objects, NO need to call .toObject()
-      availability = await (storage as any).getAllDoctorAvailability(doctorId);
-      
-      console.log("   Got", availability.length, "total slots from storage");
-    }
+      console.log("   Single day query - ISO day:", isoDayOfWeek);
+      
+      // Storage returns plain objects, NO need to call .toObject()
+      availability = await storage.getDoctorAvailability(doctorId, isoDayOfWeek);
+      
+      console.log("   Got", availability.length, "slots from storage");
+      
+    } else {
+      // All-days query 
+      console.log("   All days query");
+      
+      // Storage returns plain objects, NO need to call .toObject()
+      availability = await (storage as any).getAllDoctorAvailability(doctorId);
+      
+      console.log("   Got", availability.length, "total slots from storage");
+    }
 
-    // Convert dayOfWeek from JS format (0-6) to ISO format (1-7) for response
-    const responseAvailability = availability.map((slot: any) => ({
-      ...slot,
-      dayOfWeek: convertJsDayToIso(slot.dayOfWeek)
-    }));
+    // Convert dayOfWeek from JS format (0-6) to ISO format (1-7) for response
+    const responseAvailability = availability.map((slot: any) => ({
+      ...slot,
+      dayOfWeek: convertJsDayToIso(slot.dayOfWeek)
+    }));
 
-    console.log("   Final availability to return:", responseAvailability);
-    res.json(responseAvailability);
-  } catch (error: any) {
-    console.error("❌ GET /api/doctor/availability failed:", error);
-    console.error("   Stack:", error.stack);
-    res.status(500).json({ message: error.message });
-  }
+    console.log("   Final availability to return:", responseAvailability);
+    res.json(responseAvailability);
+  } catch (error: any) {
+    console.error("❌ GET /api/doctor/availability failed:", error);
+    console.error("   Stack:", error.stack);
+    res.status(500).json({ message: error.message });
+  }
 });
 
 app.put("/api/doctor/availability/:id", async (req, res) => {
