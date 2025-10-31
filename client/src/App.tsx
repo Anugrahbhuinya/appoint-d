@@ -19,6 +19,7 @@ import TermsPage from "@/pages/terms-page";
 import CheckoutPage from "@/pages/checkout-page";
 import VideoConsultation from "@/pages/video-consultation";
 import NotFound from "@/pages/not-found";
+import SearchResultsPage from "@/pages/search-results";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/terms" component={TermsPage} />
       <ProtectedRoute path="/checkout" component={CheckoutPage} />
       <ProtectedRoute path="/consultation/:appointmentId" component={VideoConsultation} />
+      <Route path="/search" component={SearchResultsPage} />
       <Route component={NotFound} />
     </Switch>
   );

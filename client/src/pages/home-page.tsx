@@ -6,16 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Waves } from "@/components/ui/waves-background";
 import { LiquidButton } from "@/components/ui/liquid-glass-button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { Heart, Video, Shield, Users, Clock, Star, Search, MapPin, DollarSign, HeartPulse } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { useState } from "react";
-import { Calendar as CalendarIcon } from "lucide-react";
-import { isValid, parseISO, format } from "date-fns";
+import { Heart, Video, Shield, Users, Clock, DollarSign, MapPin, Search as SearchIcon } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Input } from "@/components/ui/input";
 
 interface Doctor {
   id: string;
@@ -35,32 +29,130 @@ interface Doctor {
 
 export default function HomePage() {
   const { user } = useAuth();
-  const [preferredDate, setPreferredDate] = useState("");
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [dateError, setDateError] = useState("");
-  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [location, setLocation] = useState("");
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Array<{ place: string; lat?: string; lon?: string }>>([]);
+  const [typing, setTyping] = useState("");
+  const suggestionsRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   const { data: doctors = [] } = useQuery<Doctor[]>({
     queryKey: ["/api/doctors"],
   });
 
   const featuredDoctors = doctors.slice(0, 3);
 
-  // Validator for preferred date
-  function validatePreferredDate(dateStr: string) {
-    if (!dateStr) return "";
-    // Regex for YYYY-MM-DD
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return "Enter date as YYYY-MM-DD";
-    const parsed = parseISO(dateStr);
-    if (!isValid(parsed)) return "Invalid date";
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    if (parsed < today) return "Date cannot be in the past";
-    return "";
+  // Try auto-detect on first load. If user declines, they can still type or retry.
+  useEffect(() => {
+    tryAutoDetect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function reverseGeocode(lat: number, lon: number) {
+    try {
+      // Using OpenStreetMap Nominatim reverse geocoding (no API key).
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+        lat
+      )}&lon=${encodeURIComponent(lon)}&zoom=10&addressdetails=1`;
+      const res = await fetch(url, {
+        headers: { "User-Agent": "appointd-app/1.0 (you@example.com)" },
+      });
+      if (!res.ok) throw new Error("Reverse geocode failed");
+      const data = await res.json();
+      const addr = data.address || {};
+      const place =
+        addr.city || addr.town || addr.village || addr.county || addr.state || data.display_name;
+      return place || "";
+    } catch {
+      return "";
+    }
   }
 
-  const handleDateChange = (dateStr: string) => {
-    setPreferredDate(dateStr);
-    setDateError(validatePreferredDate(dateStr));
+  function tryAutoDetect() {
+    if (!navigator?.geolocation) {
+      setDetectError("Geolocation not supported");
+      return;
+    }
+    setDetecting(true);
+    setDetectError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const place = await reverseGeocode(latitude, longitude);
+        if (place) {
+          setLocation(place);
+          setDetectError(null);
+          setTyping(place);
+          setSuggestions([]);
+          setMenuOpen(false);
+        } else {
+          setDetectError("Could not resolve location");
+        }
+        setDetecting(false);
+      },
+      (err) => {
+        // user denied or error
+        setDetectError(err?.message || "Location permission denied");
+        setDetecting(false);
+      },
+      { timeout: 10000 }
+    );
+  }
+
+  // Debounced suggestions from Nominatim
+  useEffect(() => {
+    if (!typing || typing.trim().length === 0) {
+      setSuggestions([]);
+      return;
+    }
+    const id = setTimeout(async () => {
+      try {
+        const q = encodeURIComponent(typing);
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${q}&addressdetails=1&limit=6`;
+        const res = await fetch(url, { headers: { "User-Agent": "appointd-app/1.0 (you@example.com)" } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = (data || []).map((it: any) => ({
+          place: it.display_name,
+          lat: it.lat,
+          lon: it.lon,
+        }));
+        setSuggestions(list);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 350);
+    return () => clearTimeout(id);
+  }, [typing]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  // Build search URL; if query is empty but location exists, request doctors by default
+  const buildSearchHref = () => {
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set("query", searchQuery.trim());
+    if (location.trim()) params.set("location", location.trim());
+    // if user only provided location, default to doctors results
+    if (!searchQuery.trim() && location.trim()) params.set("category", "doctors");
+    const qs = params.toString();
+    return `/search${qs ? `?${qs}` : ""}`;
   };
 
   return (
@@ -82,171 +174,110 @@ export default function HomePage() {
       </div>
       <Navigation />
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden py-20 px-4 sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-gradient-to-r from-background/90 to-background/50 z-10" />
-        <div 
-          className="absolute inset-0 bg-cover bg-center opacity-20"
-          style={{
-            backgroundImage: "url('https://unsplash.com/photos/a-green-heart-beat-on-a-black-background-oCSol-lBtVA')"
-          }}
-        />
-        
-        <div className="relative z-20 max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div data-testid="hero-content">
-              <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-6">
-                Trusted doctors of <span className="text-primary">Ranchi</span>, available online
-              </h1>
-              <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-                Connect with certified healthcare professionals from the comfort of your home. 
-                Book appointments, consult online, and manage your health records seamlessly.
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 mb-12">
-                <Link href={user ? "/patient" : "/auth"}>
-                  <Button size="lg" variant="default" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-find-doctors">
-                    <Search className="mr-2 h-5 w-5" />
-                    Find Doctors
-                  </Button>
-                </Link>
-                <Link href={user ? (user.role === "doctor" ? "/doctor" : "/auth") : "/auth"}>
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10" data-testid="button-join-doctor">
-                    <Users className="mr-2 h-5 w-5" />
-                    Join as Doctor
-                  </Button>
-                </Link>
-              </div>
-
-              <div className="flex items-center space-x-8 text-sm text-muted-foreground">
-                <div className="flex items-center space-x-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <span>Verified Doctors</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-primary" />
-                  <span>24/7 Support</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Video className="h-4 w-4 text-primary" />
-                  <span>Video Consultation</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:justify-self-end">
-              <Card className="max-w-lg w-full backdrop-blur-sm bg-card/80" data-testid="quick-book-form">
-                <CardContent className="p-8">
-                  <h3 className="text-xl font-semibold mb-4 flex items-center">
-                    <HeartPulse className="w-6 h-6 text-primary mr-2" />
-                    Quick Book Appointment
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Select Specialization</label>
-                      <Select>
-                        <SelectTrigger data-testid="select-specialization">
-                          <SelectValue placeholder="Choose specialization" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="gp">General Physician</SelectItem>
-                          <SelectItem value="dermatology">Dermatology</SelectItem>
-                          <SelectItem value="psychiatry">Psychiatry</SelectItem>
-                          <SelectItem value="gynaecology">Gynaecology</SelectItem>
-                          <SelectItem value="pediatrics">Pediatrics</SelectItem>
-                          <SelectItem value="dietetics">Dietetics</SelectItem>
-                          <SelectItem value="ent">ENT Specialists</SelectItem>
-                          <SelectItem value="urology">Urology</SelectItem>
-                          <SelectItem value="gastroenterology">Gastroenterology</SelectItem>
-                          <SelectItem value="endocrinology">Endocrinology</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Preferred Date</label>
-                      <div className="flex items-center gap-2 relative z-[60]">
-                        <Input
-                          type="text"
-                          placeholder="YYYY-MM-DD"
-                          value={preferredDate}
-                          onChange={e => {
-                            setPreferredDate(e.target.value);
-                            setDateError(validatePreferredDate(e.target.value));
-                          }}
-                          onBlur={e => setDateError(validatePreferredDate(e.target.value))}
-                          data-testid="input-date"
-                          min={format(new Date(), "yyyy-MM-dd")}
-                          maxLength={10}
-                          inputMode="numeric"
-                          pattern="\\d{4}-\\d{2}-\\d{2}"
-                          autoComplete="off"
-                        />
-                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="ml-1 bg-primary hover:bg-primary/90 z-[61]"
-                              aria-label="Pick date"
-                            >
-                              <CalendarIcon className="h-5 w-5 text-white" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="w-auto min-w-[320px] p-0 z-[70] bg-background border shadow-xl">
-                            <Calendar
-                              mode="single"
-                              selected={preferredDate && isValid(parseISO(preferredDate)) ? parseISO(preferredDate) : undefined}
-                              onSelect={date => {
-                                if (date) {
-                                  const formatted = format(date, "yyyy-MM-dd");
-                                  setPreferredDate(formatted);
-                                  setDateError(validatePreferredDate(formatted));
-                                  setCalendarOpen(false);
-                                }
-                              }}
-                              disabled={date => date < new Date()}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      {dateError && (
-                        <p className="text-red-500 text-xs mt-1">{dateError}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Preferred Time</label>
-                      <Select>
-                        <SelectTrigger data-testid="select-time">
-                          <SelectValue placeholder="Choose time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="morning">Morning (9AM - 12PM)</SelectItem>
-                          <SelectItem value="afternoon">Afternoon (12PM - 5PM)</SelectItem>
-                          <SelectItem value="evening">Evening (5PM - 8PM)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <Link href={user ? "/patient" : "/auth"}>
-                      <Button 
-                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" 
-                        size="lg" 
-                        data-testid="button-find-available"
-                        disabled={!!dateError || !preferredDate}
+      {/* Compact top search bar: smaller panel (max-w-xl), tighter spacing */}
+      <section className="py-6">
+        <div className="max-w-xl mx-auto px-3 sm:px-4">
+          <Card className="bg-card/80 backdrop-blur-md shadow-md rounded-full overflow-hidden">
+            <CardContent className="p-1">
+              <div className="flex items-center gap-1">
+                {/* Left: Location (narrower and non-stretching) */}
+                <div className="w-28 flex-none relative">
+                  <label className="sr-only">Location</label>
+                  <div className="flex items-center bg-background/5 rounded-full border border-border px-3 py-1.5">
+                    <MapPin className="h-4 w-4 text-muted-foreground mr-2" />
+                    <Input
+                      ref={inputRef}
+                      className="bg-transparent border-0 p-0 text-sm focus:ring-0 rounded-full"
+                      placeholder="Location"
+                      value={location || typing}
+                      onChange={(e) => {
+                        setTyping(e.target.value);
+                        setLocation(e.target.value);
+                        setMenuOpen(true);
+                      }}
+                      onFocus={() => setMenuOpen(true)}
+                      data-testid="search-location"
+                    />
+                  </div>
+                  {/* Dropdown menu for Auto-detect + suggestions */}
+                  {menuOpen && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute left-0 mt-2 w-72 bg-background border border-border rounded-lg shadow-lg z-50 overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-background/5 text-sm flex items-center gap-2"
+                        onClick={() => {
+                          // run auto detect
+                          tryAutoDetect();
+                        }}
+                        data-testid="dropdown-auto-detect"
                       >
-                        Find Available Doctors
+                        {detecting ? "Detecting..." : "Auto detect my location"}
+                      </button>
+                      <div className="border-t border-border" />
+                      <div className="max-h-48 overflow-auto">
+                        {suggestions.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">Type to see suggestions</div>
+                        ) : (
+                          suggestions.map((s, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-background/5 text-sm"
+                              onClick={() => {
+                                setLocation(s.place);
+                                setTyping(s.place);
+                                setMenuOpen(false);
+                                setSuggestions([]);
+                              }}
+                            >
+                              {s.place}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {detectError && (
+                    <p className="text-xs text-muted-foreground mt-1">{detectError}</p>
+                  )}
+                </div>
+
+                {/* Right: Search input + Button grouped so button is near the input */}
+                <div className="flex-1 flex items-center gap-1">
+                  <div className="flex-1">
+                    <label className="sr-only">Search</label>
+                    <div className="flex items-center bg-background/5 rounded-full border border-border px-3 py-1.5">
+                      <SearchIcon className="h-4 w-4 text-muted-foreground mr-2" />
+                      <Input
+                        className="bg-transparent border-0 p-0 text-sm focus:ring-0 rounded-full"
+                        placeholder="Find hospitals, clinics, doctors, services..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        data-testid="search-query"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Link
+                      href={buildSearchHref()}
+                    >
+                      <Button
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-4 h-9 rounded-full flex items-center justify-center"
+                        disabled={!searchQuery.trim() && !location.trim()}
+                        data-testid="button-top-search"
+                      >
+                        Search
                       </Button>
                     </Link>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
