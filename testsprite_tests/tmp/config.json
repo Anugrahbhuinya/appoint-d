@@ -1,0 +1,16 @@
+{
+  "status": "commited",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:5000",
+  "backendAuthType": "public",
+  "executionArgs": {
+    "projectName": "appoint'd",
+    "projectPath": "C:\\Users\\ASUS\\OneDrive\\Desktop\\appoint'd\\appoint'd",
+    "testIds": [],
+    "additionalInstruction": "Focus on identifying bugs, security vulnerabilities, and potential issues in the appointment booking system, authentication, payment processing, and file upload functionality.",
+    "envs": {
+      "API_KEY": "sk-user-8mfGbvVYp54zSIHA9aLEaSSbiPOQGrtdVNux-dju1WyGHk5jCG9kVlnYUTOKpfDnj8NYtV3dPpjnRbsrmZHuo4Ts8wcxoAMlot2Y6IfJM_APmoKPziT6Jf2CKCrMvBbTC6g"
+    }
+  }
+}
