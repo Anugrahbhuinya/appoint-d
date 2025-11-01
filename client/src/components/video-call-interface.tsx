@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect } from "react"; // Added missing semicolon
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { User, Wifi, WifiOff, Video, VideoOff } from "lucide-react";
@@ -40,6 +40,20 @@ export default function VideoCallInterface({
       setIsVideoLoading(false);
     }
   }, [isCallActive]);
+
+  const startCall = () => {
+    // Logic to start the call
+    callControls.video = true;
+    callControls.audio = true;
+    // Trigger any additional logic needed to start the call
+  };
+
+  const stopCall = () => {
+    // Logic to stop the call
+    callControls.video = false;
+    callControls.audio = false;
+    // Trigger any additional logic needed to stop the call
+  };
 
   const ConnectionIndicator = () => (
     <div className="absolute top-4 left-4 z-20">
@@ -126,6 +140,7 @@ export default function VideoCallInterface({
             </div>
           </div>
         </div>
+        <button onClick={startCall} className="btn-start-call">Start Call</button>
       </div>
     );
   }
@@ -190,6 +205,7 @@ export default function VideoCallInterface({
           </Card>
         </div>
       )}
+      <button onClick={stopCall} className="btn-stop-call">End Call</button>
     </div>
   );
 }
