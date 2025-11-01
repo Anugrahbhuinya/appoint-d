@@ -19,6 +19,7 @@ interface Doctor {
   profile: {
     specialization: string;
     consultationFee: number;
+    isApproved: boolean;
   };
 }
 
@@ -41,6 +42,29 @@ const isSameDay = (date1: Date, date2: Date) =>
   date1.getFullYear() === date2.getFullYear() &&
   date1.getMonth() === date2.getMonth() &&
   date1.getDate() === date2.getDate();
+
+const isDoctorEligible = (doctor: Doctor | null) => {
+  if (!doctor) {
+    console.warn("❌ No doctor object provided");
+    return false;
+  }
+
+  console.log("🔍 Checking doctor eligibility:", {
+    id: doctor.id,
+    name: `${doctor.firstName} ${doctor.lastName}`,
+    isApproved: doctor.profile?.isApproved,
+  });
+
+  const isApproved = doctor.profile?.isApproved ?? false;
+
+  if (!isApproved) {
+    console.warn("❌ Doctor profile not approved"); 
+    return false;
+  }
+
+  console.log("✅ Doctor is eligible for bookings");
+  return true;
+};
 
 export default function AppointmentBookingModal({ doctor, open, onOpenChange }: AppointmentBookingModalProps) {
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -217,16 +241,43 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
       
       if (!res.ok) {
         console.error("❌ Booking failed:", res.status);
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error.message || "Booking failed");
+        let errorMessage = "Booking failed";
+        try {
+          const errorData = await res.json();
+          console.error("   Error response:", errorData);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          const errorText = await res.text();
+          console.error("   Raw error:", errorText);
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
       
       const result = await res.json();
       console.log("✅ Booking successful!");
+      
+      console.log("📢 [SENDING NOTIFICATION TO DOCTOR]");
+      try {
+        await apiRequest("POST", "/api/notifications", {
+          recipientId: appointmentData.doctorId,
+          type: "appointment_booked",
+          title: "New Appointment Booked",
+          message: `A new appointment has been scheduled for ${format(new Date(appointmentData.appointmentDate), "PPP 'at' p")}`,
+          appointmentId: result.id,
+          appointmentDate: appointmentData.appointmentDate,
+          appointmentType: appointmentData.type,
+        });
+        console.log("✅ Notification sent to doctor!");
+      } catch (notificationError) {
+        console.error("⚠️  Failed to send notification:", notificationError);
+      }
+      
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       toast({
         title: "Appointment Booked",
         description: "Your appointment has been scheduled successfully.",
@@ -258,7 +309,21 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
   const handleBookAppointment = () => {
     console.log("🚀 [BOOKING INITIATED]");
     
-    if (!doctor || !selectedDate || !selectedTime) {
+    if (!doctor) {
+      console.error("❌ No doctor provided");
+      return;
+    }
+
+    if (!isDoctorEligible(doctor)) {
+      toast({
+        title: "Booking Not Available",
+        description: "This doctor is not currently accepting appointments.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedDate || !selectedTime) {
       console.error("❌ Missing info");
       toast({
         title: "Missing Information",
@@ -408,6 +473,13 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
             </div>
           </div>
 
+          {/* Warning message if doctor isn't eligible */}
+          {doctor && !isDoctorEligible(doctor) && (
+            <div className="text-sm text-red-500 text-center mb-2">
+              This doctor is not currently accepting appointments
+            </div>
+          )}
+
           {/* Buttons */}
           <div className="flex space-x-3">
             <Button
@@ -419,7 +491,14 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
             </Button>
             <Button
               onClick={handleBookAppointment}
-              disabled={bookAppointmentMutation.isPending || !selectedDate || !selectedTime || isLoading}
+              disabled={
+                bookAppointmentMutation.isPending || 
+                !selectedDate || 
+                !selectedTime || 
+                isLoading ||
+                !doctor ||
+                !isDoctorEligible(doctor)
+              }
               className="flex-1"
             >
               <CreditCard className="w-4 h-4 mr-2" />

@@ -27,6 +27,7 @@ import {
 // NEW IMPORTS FOR DOCTOR PROFILE UPLOAD
 import fs from 'fs/promises'; 
 
+
 // Razorpay setup
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
   console.warn(
@@ -806,89 +807,121 @@ app.delete("/api/doctor/availability/:id", async (req, res) => {
 // APPOINTMENT ROUTES
 // ===================================
 
+// Fixed POST /api/appointments route
 app.post("/api/appointments", async (req, res) => {
-    try {
-        if (!req.isAuthenticated()) {
-            return res.status(401).json({ message: "Authentication required" });
-        }
+    try {
+        if (!req.isAuthenticated()) {
+            return res.status(401).json({ message: "Authentication required" });
+        }
 
-        const { doctorId, appointmentDate, type, consultationFee, notes } = req.body;
-        const patientId = req.user!._id.toString();
+        const { doctorId, appointmentDate, type, consultationFee, notes } = req.body;
+        const patientId = req.user!._id.toString();
 
-        // Validate required fields (omitted for brevity, assume lines 3-17 are correct)
-        // ...
-        // FIX: Ensure ID is a string when calling storage
-        const doctor = await storage.getUser(doctorId);
-        if (!doctor || doctor.role !== 'doctor') {
-            return res.status(404).json({ message: "Doctor not found" });
-        }
+        // Validate required fields
+        if (!doctorId || !appointmentDate || !type) {
+            return res.status(400).json({ message: "Missing required fields: doctorId, appointmentDate, type" });
+        }
 
-        // FIX: Ensure ID is a string when calling storage
-        const doctorProfile = await storage.getDoctorProfile(doctorId);
-        if (!doctorProfile?.isApproved) {
-            return res.status(400).json({ message: "Doctor not approved for consultations" });
-        }
+        // Check if doctor exists
+        const doctor = await storage.getUser(doctorId);
+        if (!doctor || doctor.role !== 'doctor') {
+            return res.status(404).json({ message: "Doctor not found" });
+        }
 
-        const appointmentDateTime = new Date(appointmentDate);
-        if (isNaN(appointmentDateTime.getTime())) {
-            return res.status(400).json({ message: "Invalid appointment date format" });
-        }
+        // Check if doctor profile exists and is approved
+        const doctorProfile = await storage.getDoctorProfile(doctorId);
+        if (!doctorProfile) {
+            return res.status(400).json({ message: "Doctor profile not found. Please ask the doctor to complete their profile." });
+        }
 
-        // Check for existing appointments at the same time (race condition prevention)
-        const existingAppointments = await storage.getAppointmentsByDoctorAndDate(doctorId, appointmentDateTime);
-        if (existingAppointments.length > 0) {
-            return res.status(409).json({ message: "Time slot not available. Please choose a different time." });
-        }
+        // FIX: Check if isApproved is explicitly true (not just truthy)
+        if (doctorProfile.isApproved !== true) {
+            console.log(`❌ Doctor ${doctorId} not approved. isApproved=${doctorProfile.isApproved}`);
+            return res.status(400).json({ message: "Doctor not approved for consultations" });
+        }
 
-        // ====================================================================
-        // 🛑 AVAILABILITY CHECK LOGIC 🛑
-        // ====================================================================
+        // Validate appointment date
+        const appointmentDateTime = new Date(appointmentDate);
+        if (isNaN(appointmentDateTime.getTime())) {
+            return res.status(400).json({ message: "Invalid appointment date format" });
+        }
 
-        // Calculate the day index using standard Node.js Date (0=Sun to 6=Sat)
-        const dayOfWeekClient = appointmentDateTime.getDay();
-        
-        // Format time string for comparison
-        const timeString = appointmentDateTime.toTimeString().slice(0, 5); // HH:MM format
-        
-        // CORRECTED CALL: Pass the JS day (0-6)
-        // NOTE: The `getDoctorAvailability` interface takes ISO day (1-7), but the implementation 
-        // was written to take JS day, so we adjust the argument here for the original logic flow.
-        // Reverting to the expected ISO day in the next line's call.
-        const isoDayOfWeek = convertJsDayToIso(dayOfWeekClient);
+        // Check if appointment is in the future
+        if (appointmentDateTime <= new Date()) {
+            return res.status(400).json({ message: "Appointment date must be in the future" });
+        }
 
-        const doctorAvailability = await storage.getDoctorAvailability(doctorId, isoDayOfWeek); 
+        // Check for existing appointments at the same time (race condition prevention)
+        const existingAppointments = await storage.getAppointmentsByDoctorAndDate(doctorId, appointmentDateTime);
+        if (existingAppointments.length > 0) {
+            return res.status(409).json({ message: "Time slot not available. Please choose a different time." });
+        }
 
-        const isAvailable = doctorAvailability.some(avail => 
-            // The storage layer should have filtered by dayOfWeek. We check timing:
-            (avail as any).isAvailable &&
-            timeString >= (avail as any).startTime && 
-            timeString < (avail as any).endTime 
-        );
+        // ====================================================================
+        // 🛑 AVAILABILITY CHECK LOGIC 🛑
+        // ====================================================================
 
-        if (!isAvailable) {
-            return res.status(400).json({ message: "Doctor is not available at the requested time" });
-        }
-        
-        // ====================================================================
+        // Calculate the day index using standard Node.js Date (0=Sun to 6=Sat)
+        const dayOfWeekClient = appointmentDateTime.getDay();
+        
+        // Format time string for comparison (HH:MM)
+        const hours = String(appointmentDateTime.getHours()).padStart(2, '0');
+        const minutes = String(appointmentDateTime.getMinutes()).padStart(2, '0');
+        const timeString = `${hours}:${minutes}`;
+        
+        // Convert JS day (0-6) to ISO day (1-7)
+        const isoDayOfWeek = convertJsDayToIso(dayOfWeekClient);
 
-        // 4. Create the appointment
-        const newAppointment = await storage.createAppointment({
-            patientId: patientId,
-            doctorId,
-            appointmentDate: appointmentDateTime,
-            duration: 30, 
-            type,
-            status: 'scheduled',
-            consultationFee,
-        });
+        console.log(`📅 Checking availability for doctor ${doctorId}`);
+        console.log(`   Date: ${appointmentDateTime.toDateString()}`);
+        console.log(`   Time: ${timeString}`);
+        console.log(`   Day of week (ISO): ${isoDayOfWeek}`);
 
-        // 5. Respond with success
-        return res.status(201).json(newAppointment);
+        const doctorAvailability = await storage.getDoctorAvailability(doctorId, isoDayOfWeek);
 
-    } catch (error) {
-        console.error("Error booking appointment:", error);
-        return res.status(500).json({ message: "Internal server error during appointment booking" });
-    }
+        console.log(`   Found ${doctorAvailability.length} availability slots`);
+
+        const isAvailable = doctorAvailability.some(avail => {
+            const available = (avail as any).isAvailable &&
+                timeString >= (avail as any).startTime && 
+                timeString < (avail as any).endTime;
+            
+            if (available) {
+                console.log(`   ✅ Time ${timeString} is within slot ${(avail as any).startTime}-${(avail as any).endTime}`);
+            }
+            return available;
+        });
+
+        if (!isAvailable) {
+            console.log(`   ❌ Doctor is not available at ${timeString}`);
+            return res.status(400).json({ message: "Doctor is not available at the requested time" });
+        }
+
+        console.log(`   ✅ Doctor is available at ${timeString}`);
+        
+        // ====================================================================
+
+        // Create the appointment
+        const newAppointment = await storage.createAppointment({
+            patientId: patientId,
+            doctorId,
+            appointmentDate: appointmentDateTime,
+            duration: 30, 
+            type,
+            status: 'scheduled',
+            consultationFee: consultationFee || doctorProfile.consultationFee,
+            notes: notes || ''
+        });
+
+        console.log(`✅ Appointment created: ${newAppointment._id}`);
+
+        // Respond with success
+        return res.status(201).json(newAppointment);
+
+    } catch (error) {
+        console.error("❌ Error booking appointment:", error);
+        return res.status(500).json({ message: "Internal server error during appointment booking" });
+    }
 });
 
   app.get("/api/appointments", async (req, res) => {
@@ -959,7 +992,7 @@ app.post("/api/appointments", async (req, res) => {
       }
 
       // Additional validation for specific fields
-      if (filteredUpdates.status && !['scheduled', 'completed', 'cancelled', 'no-show'].includes(filteredUpdates.status)) {
+      if (filteredUpdates.status && !['scheduled', 'completed', 'cancelled', 'no-show', 'awaiting_payment', 'confirmed'].includes(filteredUpdates.status)) {
         return res.status(400).json({ message: "Invalid status value" });
       }
 
@@ -993,6 +1026,158 @@ app.post("/api/appointments", async (req, res) => {
       res.status(400).json({ message: error.message });
     }
   });
+
+
+// ===================================
+// NOTIFICATION ROUTES (ADD THIS SECTION)
+// ===================================
+
+// POST /api/notifications - Create & send notification
+app.post("/api/notifications", async (req, res) => {
+  try {
+    const {
+      recipientId,
+      type,
+      title,
+      message,
+      appointmentId,
+      appointmentDate,
+      consultationFee,
+      doctorId,
+      notificationChannels = ["email", "inapp"],
+    } = req.body;
+
+    if (!recipientId || !type || !title || !message) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    console.log(`📢 [POST /api/notifications]`);
+    console.log(`   Type: ${type}`);
+    console.log(`   Recipient: ${recipientId}`);
+    console.log(`   Channels: ${notificationChannels.join(", ")}`);
+
+    // Get recipient user info
+    const recipient = await storage.getUser(recipientId);
+    if (!recipient) {
+      return res.status(404).json({ message: "Recipient not found" });
+    }
+
+    // Create in-app notification record
+    const notification = await storage.createNotification({
+      recipientId,
+      type,
+      title,
+      message,
+      appointmentId: appointmentId || null,
+      read: false,
+      createdAt: new Date(),
+      notificationChannels,
+      consultationFee,
+      appointmentDate,
+      doctorId,
+    });
+
+    console.log(`✅ In-app notification created`);
+
+    // Send EMAIL if requested
+    if (notificationChannels.includes("email")) {
+      try {
+        console.log(`   📧 Email queued for ${recipient.email}`);
+        // TODO: Implement actual email sending here
+        // Example providers: Nodemailer, SendGrid, etc.
+      } catch (error) {
+        console.error(`⚠️  Email sending failed:`, error);
+      }
+    }
+
+    // Send IN-APP notification (already done by creating notification record)
+    if (notificationChannels.includes("inapp")) {
+      console.log(`   🔔 In-app notification saved`);
+    }
+
+    res.status(201).json({
+      success: true,
+      notification,
+      message: "Notification sent via " + notificationChannels.join(" and "),
+    });
+  } catch (error: any) {
+    console.error("❌ POST /api/notifications failed:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET /api/notifications - Get user's notifications
+app.get("/api/notifications", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const recipientId = req.user!._id.toString();
+
+    console.log(`📖 [GET /api/notifications] for user ${recipientId}`);
+
+    const notifications = await storage.getNotificationsByRecipient(recipientId);
+
+    console.log(`✅ Retrieved ${notifications.length} notifications`);
+
+    res.json(notifications);
+  } catch (error: any) {
+    console.error("❌ GET /api/notifications failed:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// PUT /api/notifications/:id - Mark notification as read
+app.put("/api/notifications/:id", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const { read } = req.body;
+    const notificationId = req.params.id;
+
+    console.log(`✏️  [PUT /api/notifications/:id] ${notificationId} - read: ${read}`);
+
+    const notification = await storage.updateNotification(notificationId, {
+      read,
+    });
+
+    console.log(`✅ Notification updated`);
+
+    res.json(notification);
+  } catch (error: any) {
+    console.error("❌ PUT /api/notifications/:id failed:", error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// DELETE /api/notifications/:id - Delete notification
+app.delete("/api/notifications/:id", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const notificationId = req.params.id;
+
+    console.log(`🗑️  [DELETE /api/notifications/:id] ${notificationId}`);
+
+    await storage.deleteNotification(notificationId);
+
+    console.log(`✅ Notification deleted`);
+
+    res.json({ message: "Notification deleted successfully" });
+  } catch (error: any) {
+    console.error("❌ DELETE /api/notifications/:id failed:", error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// ===================================
+// END NOTIFICATION ROUTES
+// ==================================
 
   // Payment Routes
   app.post("/api/create-order", async (req, res) => {
@@ -1319,6 +1504,131 @@ app.post("/api/appointments", async (req, res) => {
 // ADMIN & DISPUTE ROUTES
 // ===================================
 
+// Add this TEST endpoint to your routes.ts to debug the issue
+// Place it BEFORE the main /api/admin/verify-doctor/:id endpoint
+
+app.get("/api/admin/test-verify/:doctorId", async (req, res) => {
+  try {
+    console.log(`\n🧪 [TEST VERIFY ENDPOINT]`);
+    
+    const doctorId = req.params.doctorId;
+    console.log(`   Testing with doctorId: ${doctorId}`);
+
+    // Step 1: Get the doctor
+    console.log(`\n   Step 1: Fetching doctor user...`);
+    const doctor = await storage.getUser(doctorId);
+    console.log(`   ✅ Doctor:`, doctor ? `${doctor.firstName} ${doctor.lastName}` : "NOT FOUND");
+
+    if (!doctor) {
+      return res.status(404).json({ 
+        error: "Doctor not found",
+        doctorId
+      });
+    }
+
+    // Step 2: Get current profile
+    console.log(`\n   Step 2: Fetching current doctor profile...`);
+    const currentProfile = await storage.getDoctorProfile(doctorId);
+    console.log(`   Current profile:`, currentProfile ? {
+      specialization: currentProfile.specialization,
+      isApproved: currentProfile.isApproved,
+      id: currentProfile._id
+    } : "NOT FOUND");
+
+    if (!currentProfile) {
+      return res.status(404).json({ 
+        error: "Profile not found",
+        doctorId
+      });
+    }
+
+    // Step 3: Try to update
+    console.log(`\n   Step 3: Attempting to update isApproved to TRUE...`);
+    const updatedProfile = await storage.updateDoctorProfile(doctorId, { isApproved: true });
+    console.log(`   ✅ Updated profile:`, {
+      specialization: updatedProfile.specialization,
+      isApproved: updatedProfile.isApproved,
+      id: updatedProfile._id
+    });
+
+    // Step 4: Verify by fetching again
+    console.log(`\n   Step 4: Fetching again to verify...`);
+    const verifyProfile = await storage.getDoctorProfile(doctorId);
+    console.log(`   ✅ Verified profile:`, {
+      specialization: verifyProfile.specialization,
+      isApproved: verifyProfile.isApproved,
+      id: verifyProfile._id
+    });
+
+    res.json({
+      success: true,
+      message: "Test completed successfully",
+      steps: {
+        doctor: `Found: ${doctor.firstName} ${doctor.lastName}`,
+        currentProfile: `isApproved was: ${currentProfile.isApproved}`,
+        updated: `isApproved set to: ${updatedProfile.isApproved}`,
+        verified: `isApproved is now: ${verifyProfile.isApproved}`
+      }
+    });
+
+  } catch (error: any) {
+    console.error(`\n❌ Test failed:`, error.message);
+    console.error(error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Also add this endpoint to check what's in the database
+app.get("/api/admin/check-doctor/:doctorId", async (req, res) => {
+  try {
+    console.log(`\n🔍 [CHECK DOCTOR IN DATABASE]`);
+    
+    const doctorId = req.params.doctorId;
+    console.log(`   doctorId: ${doctorId}`);
+
+    const profile = await storage.getDoctorProfile(doctorId);
+    
+    if (!profile) {
+      console.log(`   ❌ Profile not found in database`);
+      return res.json({
+        found: false,
+        doctorId,
+        message: "Profile does not exist in database"
+      });
+    }
+
+    console.log(`   ✅ Profile found`);
+    console.log(`   Data:`, {
+      _id: profile._id,
+      userId: profile.userId,
+      specialization: profile.specialization,
+      isApproved: profile.isApproved,
+      rating: profile.rating,
+      consultationFee: profile.consultationFee
+    });
+
+    res.json({
+      found: true,
+      profile: {
+        _id: profile._id,
+        userId: profile.userId,
+        specialization: profile.specialization,
+        isApproved: profile.isApproved,
+        rating: profile.rating,
+        consultationFee: profile.consultationFee,
+        experience: profile.experience
+      }
+    });
+
+  } catch (error: any) {
+    console.error(`\n❌ Check failed:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Admin Routes
 app.get("/api/admin/pending-verifications", async (req, res) => {
   try {
@@ -1341,25 +1651,72 @@ app.get("/api/admin/pending-verifications", async (req, res) => {
     }
   });
 
-  app.post("/api/admin/verify-doctor/:id", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
+ // Replace the POST /api/admin/verify-doctor/:id endpoint in your routes.ts
 
-      if (req.user!.role !== "admin") {
-        return res.status(403).json({ message: "Admin access required" });
-      }
+app.post("/api/admin/verify-doctor/:id", async (req, res) => {
+  try {
+    console.log(`\n📋 [POST /api/admin/verify-doctor/:id]`);
+    console.log(`   Params:`, req.params);
+    console.log(`   Body:`, req.body);
 
-      const { approved } = req.body;
-      const profile = await storage.updateDoctorProfile(req.params.id, { isApproved: approved });
-      res.json(profile);
-    } catch (error: any) {
-      console.error("POST /api/admin/verify-doctor/:id failed:", error); // Log error
-      res.status(400).json({ message: error.message });
-    }
-  });
+    if (!req.isAuthenticated()) {
+      console.log(`❌ Not authenticated`);
+      return res.status(401).json({ message: "Authentication required" });
+    }
 
+    if (req.user!.role !== "admin") {
+      console.log(`❌ Not admin. Role: ${req.user!.role}`);
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    const doctorUserId = req.params.id;
+    const { approved } = req.body;
+
+    console.log(`   doctorUserId: ${doctorUserId}`);
+    console.log(`   approved: ${approved} (type: ${typeof approved})`);
+
+    // Verify this is actually a doctor
+    console.log(`   🔍 Looking up doctor user...`);
+    const doctor = await storage.getUser(doctorUserId);
+    console.log(`   Doctor found: ${doctor ? 'YES' : 'NO'}`);
+    
+    if (!doctor) {
+      console.log(`❌ Doctor user not found`);
+      return res.status(404).json({ message: "Doctor user not found" });
+    }
+
+    if (doctor.role !== 'doctor') {
+      console.log(`❌ User is not a doctor. Role: ${doctor.role}`);
+      return res.status(404).json({ message: "User is not a doctor" });
+    }
+
+    console.log(`✅ Doctor found: Dr. ${doctor.firstName} ${doctor.lastName}`);
+
+    // Get current profile
+    console.log(`   🔍 Looking up doctor profile...`);
+    const currentProfile = await storage.getDoctorProfile(doctorUserId);
+    console.log(`   Profile found: ${currentProfile ? 'YES' : 'NO'}`);
+    
+    if (currentProfile) {
+      console.log(`   Current isApproved: ${currentProfile.isApproved}`);
+    }
+
+    // Update the doctor profile's isApproved status
+    console.log(`   💾 Updating profile with isApproved=${approved}...`);
+    const profile = await storage.updateDoctorProfile(doctorUserId, { isApproved: approved });
+
+    console.log(`✅ Profile updated`);
+    console.log(`   New isApproved: ${profile.isApproved}`);
+    console.log(`   Full profile:`, profile);
+    
+    res.json(profile);
+  } catch (error: any) {
+    console.error(`\n❌ POST /api/admin/verify-doctor/:id failed:`);
+    console.error(`   Error: ${error.message}`);
+    console.error(`   Stack: ${error.stack}`);
+    res.status(400).json({ message: error.message });
+  }
+});
   // Dispute Routes
   app.post("/api/disputes", async (req, res) => {
     try {

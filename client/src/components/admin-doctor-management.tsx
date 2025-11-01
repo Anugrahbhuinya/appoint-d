@@ -95,7 +95,7 @@ export default function AdminDoctorManagement() {
     },
   });
 
-  const doctorActionMutation = useMutation({
+ const doctorActionMutation = useMutation({
     mutationFn: async ({ 
       doctorId, 
       action, 
@@ -105,9 +105,10 @@ export default function AdminDoctorManagement() {
       action: 'approve' | 'reject' | 'suspend' | 'activate';
       reason?: string;
     }) => {
-      // Call the actual API endpoint based on the action
+      console.log(`📤 [DOCTOR ACTION] doctorId: ${doctorId}, action: ${action}`);
+      
       let endpoint = '';
-      let payload: { approved?: boolean; reason?: string; active?: boolean } = {};
+      let payload: { approved?: boolean; reason?: string; isActive?: boolean } = {};
       
       switch(action) {
         case 'approve':
@@ -119,40 +120,81 @@ export default function AdminDoctorManagement() {
           payload = { approved: false, reason };
           break;
         case 'suspend':
-          endpoint = `/api/admin/update-user-status/${doctorId}`;
+          endpoint = `/api/admin/verify-doctor/${doctorId}`;
           payload = { isActive: false, reason };
           break;
         case 'activate':
-          endpoint = `/api/admin/update-user-status/${doctorId}`;
+          endpoint = `/api/admin/verify-doctor/${doctorId}`;
           payload = { isActive: true };
           break;
       }
       
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      console.log(`   Endpoint: ${endpoint}`);
+      console.log(`   Payload:`, payload);
+      
+      const res = await apiRequest("POST", endpoint, payload);
       
       if (!res.ok) {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({}));
+        console.error(`❌ Action failed:`, errorData);
         throw new Error(errorData.message || 'Failed to perform action');
       }
       
-      return res.json();
+      const result = await res.json();
+      console.log(`✅ Action successful:`, result);
+      return result;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/doctors"] });
+      console.log(`🔄 [INVALIDATING QUERIES]`);
+      
+      // 🛑 CRITICAL: Invalidate in the correct order
+      
+      // 1. Invalidate the admin doctors list (shows all doctors with approval status)
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/doctors"],
+        exact: true,
+      });
+      console.log(`   ✅ Invalidated: /api/admin/doctors`);
+      
+      // 2. Invalidate pending verifications (removes from pending list)
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/pending-verifications"],
+        exact: true,
+      });
+      console.log(`   ✅ Invalidated: /api/admin/pending-verifications`);
+      
+      // 3. Invalidate general doctors endpoint (used by patient booking)
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/doctors"],
+        exact: true,
+      });
+      console.log(`   ✅ Invalidated: /api/doctors`);
+      
+      // 4. Invalidate analytics (pending count changes)
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/analytics"],
+        exact: true,
+      });
+      console.log(`   ✅ Invalidated: /api/admin/analytics`);
+      
+      // Force refetch all queries to ensure UI updates
+      queryClient.refetchQueries({ 
+        queryKey: ["/api/admin/doctors"],
+        exact: true,
+      });
+      
       toast({
         title: getActionTitle(variables.action),
         description: getActionDescription(variables.action),
       });
+      
       setIsActionDialogOpen(false);
       setActionReason("");
+      
+      console.log(`✅ UI should update now`);
     },
     onError: (error: Error) => {
+      console.error(`❌ Mutation error:`, error.message);
       toast({
         title: "Error",
         description: error.message,
