@@ -1,6 +1,9 @@
 import { Schema, model, Document } from 'mongoose';
+import { z } from 'zod';
 
-// User Schema
+// ==========================================
+// USER SCHEMA
+// ==========================================
 export interface IUser extends Document {
   _id: string;
   username: string;
@@ -13,7 +16,7 @@ export interface IUser extends Document {
   isVerified: boolean;
   isActive: boolean;
   createdAt: Date;
-  profilePicture?: string; // URL or path to profile picture
+  profilePicture?: string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -27,10 +30,12 @@ const userSchema = new Schema<IUser>({
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
-  profilePicture: { type: String }, // URL or path to profile picture
+  profilePicture: { type: String },
 });
 
-// Doctor Profile Schema
+// ==========================================
+// DOCTOR PROFILE SCHEMA
+// ==========================================
 export interface IDoctorProfile extends Document {
   _id: string;
   userId: string;
@@ -44,7 +49,7 @@ export interface IDoctorProfile extends Document {
   isApproved: boolean;
   rating: number;
   totalReviews: number;
-  profilePicture?: string; // URL or path to profile picture
+  profilePicture?: string;
 }
 
 const doctorProfileSchema = new Schema<IDoctorProfile>({
@@ -59,10 +64,12 @@ const doctorProfileSchema = new Schema<IDoctorProfile>({
   isApproved: { type: Boolean, default: false },
   rating: { type: Number, default: 0 },
   totalReviews: { type: Number, default: 0 },
-  profilePicture: { type: String }, // URL or path to profile picture
+  profilePicture: { type: String },
 });
 
-// Appointment Schema
+// ==========================================
+// APPOINTMENT SCHEMA (UPDATED)
+// ==========================================
 export interface IAppointment extends Document {
   _id: string;
   patientId: string;
@@ -70,10 +77,11 @@ export interface IAppointment extends Document {
   appointmentDate: Date;
   duration: number;
   type: 'video' | 'in-person';
-  status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no-show' | 'awaiting_payment' | 'confirmed';
   consultationFee: number;
   notes?: string;
   prescription?: string;
+  prescriptionFile?: string;
   createdAt: Date;
 }
 
@@ -83,14 +91,17 @@ const appointmentSchema = new Schema<IAppointment>({
   appointmentDate: { type: Date, required: true },
   duration: { type: Number, default: 30 },
   type: { type: String, required: true, enum: ['video', 'in-person'] },
-  status: { type: String, default: 'scheduled', enum: ['scheduled', 'completed', 'cancelled', 'no-show'] },
+  status: { type: String, default: 'scheduled', enum: ['scheduled', 'completed', 'cancelled', 'no-show', 'awaiting_payment', 'confirmed'] },
   consultationFee: { type: Number, required: true },
   notes: { type: String },
   prescription: { type: String },
+  prescriptionFile: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 
-// Doctor Document Schema
+// ==========================================
+// DOCTOR DOCUMENT SCHEMA
+// ==========================================
 export interface IDoctorDocument extends Document {
   _id: string;
   doctorId: string;
@@ -110,7 +121,9 @@ const doctorDocumentSchema = new Schema<IDoctorDocument>({
   uploadedAt: { type: Date, default: Date.now }
 });
 
-// Patient Record Schema
+// ==========================================
+// PATIENT RECORD SCHEMA
+// ==========================================
 export interface IPatientRecord extends Document {
   _id: string;
   patientId: string;
@@ -132,11 +145,13 @@ const patientRecordSchema = new Schema<IPatientRecord>({
   uploadedAt: { type: Date, default: Date.now }
 });
 
-// Doctor Availability Schema
+// ==========================================
+// DOCTOR AVAILABILITY SCHEMA
+// ==========================================
 export interface IDoctorAvailability extends Document {
   _id: string;
   doctorId: string;
-  dayOfWeek: number; // 0-6 (Sunday-Saturday)
+  dayOfWeek: number;
   startTime: string;
   endTime: string;
   isAvailable: boolean;
@@ -150,7 +165,9 @@ const doctorAvailabilitySchema = new Schema<IDoctorAvailability>({
   isAvailable: { type: Boolean, default: true }
 });
 
-// Payment Schema
+// ==========================================
+// PAYMENT SCHEMA
+// ==========================================
 export interface IPayment extends Document {
   _id: string;
   appointmentId: string;
@@ -176,7 +193,51 @@ const paymentSchema = new Schema<IPayment>({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Dispute Schema
+// ==========================================
+// NOTIFICATION SCHEMA (NEW)
+// ==========================================
+export interface INotification extends Document {
+  _id: string;
+  recipientId: string;
+  type: 'payment_pending' | 'appointment_confirmed' | 'appointment_scheduled' | 'appointment_cancelled';
+  title: string;
+  message: string;
+  appointmentId?: string;
+  appointmentDate?: Date;
+  consultationFee?: number;
+  doctorId?: string;
+  notificationChannels: ('email' | 'inapp')[];
+  read: boolean;
+  createdAt: Date;
+}
+
+const notificationSchema = new Schema<INotification>({
+  recipientId: { type: String, required: true, index: true },
+  type: {
+    type: String,
+    enum: ['payment_pending', 'appointment_confirmed', 'appointment_scheduled', 'appointment_cancelled'],
+    required: true
+  },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  appointmentId: { type: String },
+  appointmentDate: { type: Date },
+  consultationFee: { type: Number },
+  doctorId: { type: String },
+  notificationChannels: {
+    type: [String],
+    enum: ['email', 'inapp'],
+    default: ['email', 'inapp']
+  },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now, index: true }
+});
+
+notificationSchema.index({ recipientId: 1, createdAt: -1 });
+
+// ==========================================
+// DISPUTE SCHEMA
+// ==========================================
 export interface IDispute extends Document {
   _id: string;
   appointmentId: string;
@@ -204,7 +265,9 @@ const disputeSchema = new Schema<IDispute>({
   resolvedAt: { type: Date }
 });
 
-// Create models
+// ==========================================
+// MODELS
+// ==========================================
 export const User = model<IUser>('User', userSchema);
 export const DoctorProfile = model<IDoctorProfile>('DoctorProfile', doctorProfileSchema);
 export const Appointment = model<IAppointment>('Appointment', appointmentSchema);
@@ -212,19 +275,25 @@ export const DoctorDocument = model<IDoctorDocument>('DoctorDocument', doctorDoc
 export const PatientRecord = model<IPatientRecord>('PatientRecord', patientRecordSchema);
 export const DoctorAvailability = model<IDoctorAvailability>('DoctorAvailability', doctorAvailabilitySchema);
 export const Payment = model<IPayment>('Payment', paymentSchema);
+export const Notification = model<INotification>('Notification', notificationSchema);
 export const Dispute = model<IDispute>('Dispute', disputeSchema);
 
-// Type definitions for compatibility with existing code
-export type User = IUser;
-export type DoctorProfile = IDoctorProfile;
-export type Appointment = IAppointment;
-export type DoctorDocument = IDoctorDocument;
-export type PatientRecord = IPatientRecord;
-export type DoctorAvailability = IDoctorAvailability;
-export type Payment = IPayment;
-export type Dispute = IDispute;
+// ==========================================
+// TYPE EXPORTS
+// ==========================================
+export type UserType = IUser;
+export type DoctorProfileType = IDoctorProfile;
+export type AppointmentType = IAppointment;
+export type DoctorDocumentType = IDoctorDocument;
+export type PatientRecordType = IPatientRecord;
+export type DoctorAvailabilityType = IDoctorAvailability;
+export type PaymentType = IPayment;
+export type NotificationType = INotification;
+export type DisputeType = IDispute;
 
-// Insert types (for compatibility) - plain objects without Mongoose methods
+// ==========================================
+// INSERT TYPES (Plain Objects)
+// ==========================================
 export type InsertUser = {
   username: string;
   email: string;
@@ -257,10 +326,11 @@ export type InsertAppointment = {
   appointmentDate: Date;
   duration: number;
   type: 'video' | 'in-person';
-  status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no-show' | 'awaiting_payment' | 'confirmed';
   consultationFee: number;
   notes?: string;
   prescription?: string;
+  prescriptionFile?: string;
 };
 
 export type InsertDoctorDocument = {
@@ -299,6 +369,19 @@ export type InsertPayment = {
   razorpayPaymentId?: string;
 };
 
+export type InsertNotification = {
+  recipientId: string;
+  type: 'payment_pending' | 'appointment_confirmed' | 'appointment_scheduled' | 'appointment_cancelled';
+  title: string;
+  message: string;
+  appointmentId?: string;
+  appointmentDate?: Date;
+  consultationFee?: number;
+  doctorId?: string;
+  notificationChannels?: ('email' | 'inapp')[];
+  read?: boolean;
+};
+
 export type InsertDispute = {
   appointmentId: string;
   patientId: string;
@@ -310,15 +393,16 @@ export type InsertDispute = {
   resolvedBy?: string;
 };
 
-// Validation schemas using Zod (for compatibility with existing code)
-import { z } from 'zod';
+// ==========================================
+// VALIDATION SCHEMAS (ZOD)
+// ==========================================
 
 export const insertUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(30, "Username must be less than 30 characters"),
   email: z.string().email("Invalid email format"),
   password: z.string()
     .min(8, "Password must be at least 8 characters")
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, 
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
       "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"),
   role: z.enum(['patient', 'doctor', 'admin']).default('patient'),
   firstName: z.string().optional(),
@@ -348,10 +432,11 @@ export const insertAppointmentSchema = z.object({
   appointmentDate: z.date(),
   duration: z.number().default(30),
   type: z.enum(['video', 'in-person']),
-  status: z.enum(['scheduled', 'completed', 'cancelled', 'no-show']).default('scheduled'),
+  status: z.enum(['scheduled', 'completed', 'cancelled', 'no-show', 'awaiting_payment', 'confirmed']).default('scheduled'),
   consultationFee: z.number().min(0),
   notes: z.string().optional(),
   prescription: z.string().optional(),
+  prescriptionFile: z.string().optional(),
 });
 
 export const insertDoctorDocumentSchema = z.object({
@@ -388,6 +473,19 @@ export const insertPaymentSchema = z.object({
   paymentMethod: z.string().optional(),
   razorpayOrderId: z.string().optional(),
   razorpayPaymentId: z.string().optional(),
+});
+
+export const insertNotificationSchema = z.object({
+  recipientId: z.string(),
+  type: z.enum(['payment_pending', 'appointment_confirmed', 'appointment_scheduled', 'appointment_cancelled']),
+  title: z.string(),
+  message: z.string(),
+  appointmentId: z.string().optional(),
+  appointmentDate: z.date().optional(),
+  consultationFee: z.number().optional(),
+  doctorId: z.string().optional(),
+  notificationChannels: z.array(z.enum(['email', 'inapp'])).default(['email', 'inapp']),
+  read: z.boolean().default(false),
 });
 
 export const insertDisputeSchema = z.object({

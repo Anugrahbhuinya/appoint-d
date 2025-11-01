@@ -379,34 +379,36 @@ export class MongoStorage implements IStorage {
     return saved;
   }
 
-  async getDoctorAvailability(doctorId: string, dayOfWeek: number) {
-    console.log("🔍 [getDoctorAvailability]");
-    console.log("   doctorId:", doctorId);
-    console.log("   dayOfWeek (ISO):", dayOfWeek);
-    
-    // dayOfWeek comes as ISO (1-7) from frontend, convert to JS (0-6) for query
-    const jsDay = convertIsoToJsDay(dayOfWeek);
-    
-    console.log("   Converted to JS day:", jsDay);
+ async getDoctorAvailability(doctorId: string, dayOfWeek: number) {
+  console.log("🔍 [getDoctorAvailability]");
+  console.log("   doctorId:", doctorId);
+  console.log("   dayOfWeek (ISO):", dayOfWeek);
+  
+  const jsDay = convertIsoToJsDay(dayOfWeek);
+  
+  console.log("   Converted to JS day:", jsDay);
 
-    const result = await DoctorAvailability.find({
-      doctorId: doctorId,
-      dayOfWeek: jsDay,
-      isAvailable: true
-    }).sort({ startTime: 1 }).lean();  // 🛑 FIX: Use .lean() to get plain objects
+  const result = await DoctorAvailability.find({
+    doctorId: doctorId,
+    dayOfWeek: jsDay
+    // ✅ REMOVED: isAvailable: true (we'll check this in the appointment booking)
+  }).sort({ startTime: 1 }).lean();
 
-    console.log("   Found", result.length, "slots");
+  console.log("   Found", result.length, "slots");
 
-    // Convert back to ISO (1-7) before sending to frontend
-    const converted = result.map((slot: any) => ({
-      ...slot,
-      dayOfWeek: convertJsDayToIso(slot.dayOfWeek)
-    }));
-    
-    console.log("   Converted back to ISO, returning", converted.length, "slots");
-    
-    return converted;
+  if (result.length === 0) {
+    console.warn("   ⚠️ No availability slots found for doctor on this day");
   }
+
+  const converted = result.map((slot: any) => ({
+    ...slot,
+    dayOfWeek: convertJsDayToIso(slot.dayOfWeek)
+  }));
+  
+  console.log("   Converted back to ISO, returning", converted.length, "slots");
+  
+  return converted;
+}
 
   async getAllDoctorAvailability(doctorId: string) {
     console.log("🔍 [getAllDoctorAvailability]");
@@ -540,6 +542,119 @@ export class MongoStorage implements IStorage {
     }
     return dispute;
   }
+
+
+  
+// =======================
+// NOTIFICATION METHODS
+// =======================
+
+async createNotification(data: any) {
+  try {
+    console.log("📢 [createNotification]");
+    console.log("   type:", data.type);
+    console.log("   recipient:", data.recipientId);
+    
+    const notification = new Notification(data);
+    const saved = await notification.save();
+    
+    console.log("   ✅ Notification created:", saved._id);
+    
+    return saved;
+  } catch (error) {
+    console.error("❌ Error creating notification:", error);
+    throw error;
+  }
+}
+
+async getNotificationsByRecipient(recipientId: string) {
+  try {
+    console.log("📖 [getNotificationsByRecipient]");
+    console.log("   recipientId:", recipientId);
+    
+    const notifications = await Notification.find({ recipientId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    
+    console.log("   ✅ Found", notifications.length, "notifications");
+    
+    return notifications;
+  } catch (error) {
+    console.error("❌ Error getting notifications:", error);
+    throw error;
+  }
+}
+
+async updateNotification(notificationId: string, updates: any) {
+  try {
+    console.log("✏️ [updateNotification]");
+    console.log("   notificationId:", notificationId);
+    console.log("   updates:", updates);
+    
+    const notification = await Notification.findByIdAndUpdate(
+      notificationId,
+      updates,
+      { new: true }
+    ).lean();
+    
+    if (!notification) {
+      throw new Error("Notification not found");
+    }
+    
+    console.log("   ✅ Updated successfully");
+    
+    return notification;
+  } catch (error) {
+    console.error("❌ Error updating notification:", error);
+    throw error;
+  }
+}
+
+async deleteNotification(notificationId: string) {
+  try {
+    console.log("🗑️ [deleteNotification]");
+    console.log("   notificationId:", notificationId);
+    
+    await Notification.findByIdAndDelete(notificationId);
+    
+    console.log("   ✅ Deleted successfully");
+  } catch (error) {
+    console.error("❌ Error deleting notification:", error);
+    throw error;
+  }
+}
+
+async getUnreadNotificationsCount(recipientId: string) {
+  try {
+    return await Notification.countDocuments({ 
+      recipientId, 
+      read: false 
+    });
+  } catch (error) {
+    console.error("❌ Error getting unread count:", error);
+    throw error;
+  }
+}
+
+async markAllNotificationsAsRead(recipientId: string) {
+  try {
+    console.log("✔️ [markAllNotificationsAsRead]");
+    console.log("   recipientId:", recipientId);
+    
+    const result = await Notification.updateMany(
+      { recipientId, read: false },
+      { read: true }
+    );
+    
+    console.log("   ✅ Marked", result.modifiedCount, "notifications as read");
+    
+    return result;
+  } catch (error) {
+    console.error("❌ Error marking as read:", error);
+    throw error;
+  }
+}
 
   // =======================
   // ADMIN METHODS

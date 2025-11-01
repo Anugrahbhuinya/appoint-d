@@ -361,23 +361,23 @@ export default function AdminDashboard() {
       });
     },
   });
+const verifyProfileMutation = useMutation({
+    mutationFn: async ({ userId, approved }: { userId: string; approved: boolean }) => {
+        // ✅ CORRECT ENDPOINT - Admin endpoint
+        const response = await apiRequest("POST", `/api/admin/verify-doctor/${userId}`, { approved });
+        return response.json();
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-verifications"] });
+        toast({ title: "Profile Approved", description: "Doctor profile status updated." });
+        setShowDoctorModal(false);
+    },
+    onError: (error: Error) => {
+        toast({ title: "Approval Failed", description: error.message, variant: "destructive" });
+    },
+});
 
-    const verifyProfileMutation = useMutation({
-        mutationFn: async ({ userId, approved }: { userId: string; approved: boolean }) => {
-            // This hits the PUT /api/doctor/profile route to set isApproved
-            // Note: The routes.ts PUT handler uses the user ID from the session, but we pass it explicitly here for clarity
-            const response = await apiRequest("PUT", `/api/doctor/profile/${userId}`, { isApproved: approved });
-            return response.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-            toast({ title: "Profile Approved", description: "Doctor profile status updated." });
-            setShowDoctorModal(false); // Close modal on success
-        },
-        onError: (error: Error) => {
-            toast({ title: "Approval Failed", description: error.message, variant: "destructive" });
-        },
-    });
 
     const verifyDocumentMutation = useMutation({
         mutationFn: async (vars: { documentId: string; verified: boolean; reason?: string }) => {
