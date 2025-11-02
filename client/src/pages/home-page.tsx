@@ -281,11 +281,134 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Health Consultation Categories Section */}
+      <section className="py-16 bg-background" data-testid="health-categories-section">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-12">
+            <div>
+              {/* use site foreground color so heading matches other fonts */}
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-2" style={{ fontFamily: 'Comfortaa' }}>
+                Consult top doctors online for any health concern
+              </h2>
+              <p className="text-lg text-muted-foreground">
+                Private online consultations with verified doctors in all specialists
+              </p>
+            </div>
+            <Button variant="outline" className="mt-4 md:mt-0 border-blue-500 text-blue-500 hover:bg-blue-50 rounded-full">
+              View All Specialities
+            </Button>
+          </div>
+
+          {/* show items in a single row on medium+ screens; use 5 columns when only 5 items present */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8">
+            {/* Period doubts or Pregnancy */}
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
+                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
+                  <path d="M50 20 C30 20, 20 35, 20 50 C20 65, 35 75, 50 75 C65 75, 80 65, 80 50 C80 35, 70 20, 50 20 Z" 
+                        stroke="white" strokeWidth="3" fill="rgba(59, 130, 246, 0.3)"/>
+                  <path d="M35 50 Q50 40, 65 50" stroke="white" strokeWidth="3" fill="none"/>
+                  <circle cx="35" cy="50" r="4" fill="rgba(59, 130, 246, 0.6)"/>
+                  <circle cx="65" cy="50" r="4" fill="rgba(59, 130, 246, 0.6)"/>
+                  <path d="M50 75 L50 95" stroke="#EF4444" strokeWidth="4"/>
+                  <circle cx="50" cy="95" r="6" fill="#EF4444"/>
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Dental pain or concern</h3>
+              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+                CONSULT NOW
+              </Button>
+            </div>
+
+            {/* Acne, pimple or skin issues */}
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
+                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
+                  <ellipse cx="50" cy="65" rx="25" ry="35" fill="rgba(59, 130, 246, 0.2)"/>
+                  <ellipse cx="50" cy="50" rx="28" ry="32" fill="gray" opacity="0.3"/>
+                  <path d="M35 35 Q50 30, 65 35" stroke="gray" strokeWidth="2"/>
+                  <circle cx="42" cy="50" r="3" fill="#EF4444"/>
+                  <circle cx="58" cy="50" r="3" fill="#EF4444"/>
+                  <circle cx="50" cy="58" r="3" fill="#EF4444"/>
+                  <circle cx="45" cy="45" r="2" fill="#EF4444"/>
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Acne, pimple or skin issues</h3>
+              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+                CONSULT NOW
+              </Button>
+            </div>
+
+           
+            {/* Cold, cough or fever */}
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
+                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
+                  <ellipse cx="50" cy="60" rx="22" ry="30" fill="gray" opacity="0.2"/>
+                  <ellipse cx="50" cy="70" rx="20" ry="28" fill="rgba(59, 130, 246, 0.3)"/>
+                  <ellipse cx="50" cy="50" rx="28" ry="32" fill="gray" opacity="0.3"/>
+                  <path d="M35 35 Q50 30, 65 35" stroke="gray" strokeWidth="2"/>
+                  <ellipse cx="48" cy="42" rx="12" ry="14" fill="rgba(255, 165, 0, 0.3)"/>
+                  <path d="M55 42 Q58 40, 60 45 M60 45 Q62 50, 58 52 M58 52 Q54 54, 52 49" 
+                        stroke="#EF4444" strokeWidth="2" fill="none"/>
+                  <circle cx="40" cy="70" r="5" fill="white"/>
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Cold, cough or fever</h3>
+              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+                CONSULT NOW
+              </Button>
+            </div>
+
+            {/* Child not feeling well */}
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
+                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
+                  <circle cx="50" cy="45" r="20" fill="#FB923C"/>
+                  <circle cx="50" cy="45" r="18" fill="#FED7AA"/>
+                  <ellipse cx="45" cy="44" rx="2" ry="3" fill="black"/>
+                  <ellipse cx="55" cy="44" rx="2" ry="3" fill="black"/>
+                  <path d="M45 50 Q50 53, 55 50" stroke="black" strokeWidth="2" fill="none"/>
+                  <ellipse cx="50" cy="75" rx="18" ry="22" fill="#9333EA"/>
+                  <path d="M35 70 Q40 75, 35 80 M65 70 Q60 75, 65 80" stroke="#C084FC" strokeWidth="3"/>
+                  <ellipse cx="50" cy="62" rx="8" ry="10" fill="#EF4444"/>
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Child not feeling well</h3>
+              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+                CONSULT NOW
+              </Button>
+            </div>
+
+            {/* Depression or anxiety */}
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
+                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
+                  <path d="M50 20 Q30 15, 20 35 Q20 55, 35 60 Q30 50, 35 40 Q40 30, 50 30 Q60 30, 65 40 Q70 50, 65 60 Q80 55, 80 35 Q70 15, 50 20 Z" 
+                        fill="#FED7AA"/>
+                  <rect x="20" y="20" width="60" height="35" rx="10" fill="none" stroke="white" strokeWidth="2"/>
+                  <path d="M40 28 L60 28 M40 35 L60 35 M40 42 L55 42" stroke="white" strokeWidth="3"/>
+                  <ellipse cx="50" cy="75" rx="18" ry="22" fill="#FED7AA"/>
+                  <ellipse cx="40" cy="44" rx="3" ry="3" fill="#FED7AA"/>
+                  <ellipse cx="60" cy="44" rx="3" ry="3" fill="#FED7AA"/>
+                  <path d="M38 47 Q43 52, 38 57" stroke="#EF4444" strokeWidth="2" fill="none"/>
+                  <circle cx="50" cy="48" r="8" fill="rgba(255, 200, 200, 0.5)"/>
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Depression or anxiety</h3>
+              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+                CONSULT NOW
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Features Section */}
       <section className="py-20 bg-card/30" data-testid="features-section">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Choose appoint'd?</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Comfortaa' }}>Why Choose appoint'd?</h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Your health is our priority. We provide comprehensive healthcare solutions with cutting-edge technology.
             </p>
