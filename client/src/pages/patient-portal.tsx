@@ -98,10 +98,11 @@ export default function PatientPortal() {
 
     // 🛑 FIX: Map MongoDB _id to id field
     const doctors: Doctor[] = doctorsRaw.map(doc => ({
-        id: doc._id || doc.id,  // Use _id if available, fallback to id
+        id: doc.userId || doc._id || doc.id,  // Use _id if available, fallback to id
         firstName: doc.firstName || "",
         lastName: doc.lastName || "",
         email: doc.email || "",
+        
         profile: {
             specialization: doc.profile?.specialization || "",
             experience: doc.profile?.experience || 0,
@@ -111,7 +112,13 @@ export default function PatientPortal() {
             totalReviews: doc.profile?.totalReviews || 0,
             isApproved: doc.profile?.isApproved || false,
         }
+        
     }));
+
+    useEffect(() => {
+        console.log("📥 FETCHED DOCTOR COUNT:", doctorsRaw.length);
+        console.log("➡️ MAPPED DOCTOR DATA (first 2):", doctors.slice(0, 2));
+    }, [doctorsRaw.length, doctors.length]);
 
     const { data: appointments = [] } = useQuery<Appointment[]>({
         queryKey: ["/api/appointments"],
@@ -120,11 +127,11 @@ export default function PatientPortal() {
     // 🛑 FIX: Handle booking appointment - now receives doctor object
     const handleBookAppointment = (doctor: Doctor) => {
         console.log("🏥 [HANDLE BOOK APPOINTMENT CALLED]");
-        console.log("   Received doctor:", doctor);
-        console.log("   Doctor ID:", doctor?.id);
-        console.log("   Doctor name:", doctor?.firstName, doctor?.lastName);
-        console.log("   Has profile?", !!doctor?.profile);
-        console.log("   Profile:", doctor?.profile);
+        console.log("   Received doctor:", doctor);
+        console.log("   Doctor ID:", doctor?.id);
+        console.log("   Doctor name:", doctor?.firstName, doctor?.lastName);
+        console.log("   Has profile?", !!doctor?.profile);
+        console.log("   Profile:", doctor?.profile);
         
         if (!doctor || !doctor.id) {
             console.error("❌ Invalid doctor object");
@@ -145,8 +152,8 @@ export default function PatientPortal() {
     // Debug selected doctor changes
     useEffect(() => {
         console.log("📋 [SELECTED DOCTOR CHANGED]");
-        console.log("   selectedDoctor:", selectedDoctor);
-        console.log("   isBookingModalOpen:", isBookingModalOpen);
+        console.log("   selectedDoctor:", selectedDoctor);
+        console.log("   isBookingModalOpen:", isBookingModalOpen);
     }, [selectedDoctor, isBookingModalOpen]);
 
     const bookAppointmentMutation = useMutation({
@@ -548,12 +555,14 @@ export default function PatientPortal() {
                 </div>
             </div>
 
-            {/* Appointment Booking Modal */}
-            <AppointmentBookingModal 
-                doctor={selectedDoctor} 
-                open={isBookingModalOpen}
-                onOpenChange={setIsBookingModalOpen}
-            />
+            {/* Appointment Booking Modal - NOW CONDITIONAL */}
+            {selectedDoctor && (
+                <AppointmentBookingModal 
+                    doctor={selectedDoctor} 
+                    open={isBookingModalOpen}
+                    onOpenChange={setIsBookingModalOpen}
+                />
+            )}
         </div>
     );
 }

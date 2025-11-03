@@ -104,12 +104,15 @@ export default function DoctorPortal() {
   }
 
   const {
-    data: profile,
-    isLoading: profileLoading,
-    refetch: refetchProfile,
-  } = useQuery<DoctorProfile>({
-    queryKey: ["/api/doctor/profile"],
-  });
+  data: profile,
+  isLoading: profileLoading,
+  refetch: refetchProfile,
+} = useQuery<DoctorProfile>({
+  queryKey: ["/api/doctor/profile"],
+  staleTime: 10000, // ✅ Cache expires after 10 seconds
+  refetchOnWindowFocus: true, // ✅ Auto-refetch when user switches tabs
+  refetchInterval: 30000, // ✅ Poll every 30 seconds
+});
 
   const { data: appointments = [], refetch: refetchAppointments } = useQuery<
     Appointment[]

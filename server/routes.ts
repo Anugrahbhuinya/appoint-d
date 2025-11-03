@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import Razorpay from "razorpay";
@@ -150,6 +151,7 @@ const convertIsoToJsDay = (isoDay: number): number => {
 const convertJsDayToIso = (jsDay: number): number => {
   return jsDay === 0 ? 7 : jsDay;
 };
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -576,37 +578,45 @@ app.post("/api/doctor/profile/picture/remove", async (req, res) => {
   // --------------------------------------------------------
 
   // Doctor Search Routes
-  app.get("/api/doctors", async (req, res) => {
-    try {
-      const { specialization, location, minFee, maxFee } = req.query;
-      
-      let doctors = await storage.getDoctorsWithProfiles(); 
+ // In your routes.ts, replace the GET /api/doctors endpoint with this:
 
-      // Filter by specialization
-      if (specialization && specialization !== "all") {
-        doctors = doctors.filter((doctor: any) =>
-          doctor.profile.specialization.toLowerCase().includes((specialization as string).toLowerCase())
-        );
-      }
+// Replace your entire /api/doctors endpoint with this simplified version
 
-      // Filter by consultation fee
-      if (minFee) {
-        doctors = doctors.filter(
-          (doctor: any) => doctor.profile.consultationFee >= parseInt(minFee as string)
-        );
-      }
-      if (maxFee) {
-        doctors = doctors.filter(
-          (doctor: any) => doctor.profile.consultationFee <= parseInt(maxFee as string)
-        );
-      }
-
-      res.json(doctors);
-    } catch (error: any) {
-      console.error("GET /api/doctors failed:", error); 
-      res.status(500).json({ message: error.message || "Failed to retrieve doctor list." });
-    }
-  });
+app.get("/api/doctors", async (req, res) => {
+  try {
+    console.log("\n🏥 [GET /api/doctors] REQUEST");
+    
+    const doctors = await storage.getDoctorsWithProfiles();
+    
+    console.log(`✅ Retrieved ${doctors.length} doctors`);
+    
+    // Convert to plain objects before sending
+    const plainDoctors = doctors.map((doc: any) => ({
+      _id: doc._id?.toString?.() || doc._id,
+      firstName: doc.firstName,
+      lastName: doc.lastName,
+      email: doc.email,
+      role: doc.role,
+      profile: doc.profile ? {
+        _id: doc.profile._id?.toString?.() || doc.profile._id,
+        specialization: doc.profile.specialization,
+        experience: doc.profile.experience,
+        consultationFee: doc.profile.consultationFee,
+        bio: doc.profile.bio,
+        isApproved: doc.profile.isApproved,
+        rating: doc.profile.rating
+      } : null
+    }));
+    
+    console.log(`📝 Converted to plain objects:`, plainDoctors);
+    
+    res.status(200).json(plainDoctors);
+    
+  } catch (error: any) {
+    console.error("❌ ERROR:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
 
   app.get("/api/doctors/:id", async (req, res) => {
     try {
@@ -633,6 +643,82 @@ app.post("/api/doctor/profile/picture/remove", async (req, res) => {
       res.status(500).json({ message: error.message });
     }
   });
+
+// Add this code RIGHT AFTER setupAuth(app); in registerRoutes function
+
+// Debug: Connection info
+app.get("/api/debug/connection-info", async (req, res) => {
+  try {
+    const connection = mongoose.connection;
+    const collections = await connection.db.listCollections().toArray();
+    
+    res.json({
+      databaseName: connection.name,
+      collections: collections.map((c: any) => c.name),
+      userCount: await connection.collection('users').countDocuments(),
+      doctorCount: await connection.collection('users').countDocuments({ role: 'doctor' }),
+      profileCount: await connection.collection('doctorprofiles').countDocuments(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug: Get raw doctors
+app.get("/api/debug/raw-doctors", async (req, res) => {
+  try {
+    const doctors = await storage.getUsersByRole("doctor");
+    res.json({
+      count: doctors.length,
+      doctors: doctors.map((d: any) => ({
+        _id: d._id.toString(),
+        firstName: d.firstName,
+        lastName: d.lastName,
+        email: d.email
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug: Get raw profiles
+app.get("/api/debug/raw-profiles", async (req, res) => {
+  try {
+    const profiles = await storage.getDoctorProfiles();
+    res.json({
+      count: profiles.length,
+      profiles: profiles.map((p: any) => ({
+        _id: p._id.toString(),
+        userId: p.userId instanceof mongoose.Types.ObjectId ? p.userId.toString() : p.userId,
+        specialization: p.specialization,
+        isApproved: p.isApproved
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug: Test getDoctorsWithProfiles
+app.get("/api/debug/get-doctors-with-profiles", async (req, res) => {
+  try {
+    const result = await storage.getDoctorsWithProfiles();
+    res.json({
+      count: result.length,
+      doctors: result.map((d: any) => ({
+        _id: d._id.toString(),
+        firstName: d.firstName,
+        lastName: d.lastName,
+        hasProfile: !!d.profile,
+        specialization: d.profile?.specialization,
+        isApproved: d.profile?.isApproved
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
 
 // ===========================
 // DOCTOR AVAILABILITY ROUTES
