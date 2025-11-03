@@ -593,8 +593,7 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center text-sm">
-            <p className="text-foreground/90">&copy; 2023 appoint'd. All rights reserved.</p>
-            <p className="text-foreground/90">Made with ❤️ for healthcare in Ranchi</p>
+            <p className="text-foreground/90">&copy; 2025 appoint'd. All rights reserved.</p>
           </div>
         </div>
       </footer>
