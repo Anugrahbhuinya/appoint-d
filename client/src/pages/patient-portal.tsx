@@ -15,6 +15,7 @@ import AppointmentCard from "@/components/appointment-card";
 import AppointmentBookingModal from "@/components/appointment-booking-modal";
 import PatientProfileManager from "@/components/patient-profile-manager";
 import HealthRecordsManager from "@/components/health-records-manager";
+import { PatientNotificationDashboard } from "@/components/patient-notification-dashboard";
 import { 
     Search, 
     Calendar, 
@@ -22,7 +23,8 @@ import {
     PillBottle, 
     User,
     Heart,
-    Clock
+    Clock,
+    Bell
 } from "lucide-react";
 
 interface Doctor {
@@ -68,6 +70,20 @@ export default function PatientPortal() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
+    // ✅ Fetch unread notifications count
+    const { data: notifications = [] } = useQuery({
+        queryKey: ["/api/notifications"],
+        queryFn: async () => {
+            const res = await fetch("/api/notifications");
+            if (!res.ok) throw new Error("Failed to fetch notifications");
+            return res.json();
+        },
+        refetchInterval: 5000,
+        refetchIntervalInBackground: true,
+    });
+
+    const unreadCount = notifications.filter((n: any) => !n.read).length;
+
     // Redirect if not patient
     if (user?.role !== "patient") {
         return <div className="min-h-screen flex items-center justify-center">
@@ -98,7 +114,7 @@ export default function PatientPortal() {
 
     // 🛑 FIX: Map MongoDB _id to id field
     const doctors: Doctor[] = doctorsRaw.map(doc => ({
-        id: doc.userId || doc._id || doc.id,  // Use _id if available, fallback to id
+        id: doc.userId || doc._id || doc.id,
         firstName: doc.firstName || "",
         lastName: doc.lastName || "",
         email: doc.email || "",
@@ -127,11 +143,11 @@ export default function PatientPortal() {
     // 🛑 FIX: Handle booking appointment - now receives doctor object
     const handleBookAppointment = (doctor: Doctor) => {
         console.log("🏥 [HANDLE BOOK APPOINTMENT CALLED]");
-        console.log("   Received doctor:", doctor);
-        console.log("   Doctor ID:", doctor?.id);
-        console.log("   Doctor name:", doctor?.firstName, doctor?.lastName);
-        console.log("   Has profile?", !!doctor?.profile);
-        console.log("   Profile:", doctor?.profile);
+        console.log("   Received doctor:", doctor);
+        console.log("   Doctor ID:", doctor?.id);
+        console.log("   Doctor name:", doctor?.firstName, doctor?.lastName);
+        console.log("   Has profile?", !!doctor?.profile);
+        console.log("   Profile:", doctor?.profile);
         
         if (!doctor || !doctor.id) {
             console.error("❌ Invalid doctor object");
@@ -152,8 +168,8 @@ export default function PatientPortal() {
     // Debug selected doctor changes
     useEffect(() => {
         console.log("📋 [SELECTED DOCTOR CHANGED]");
-        console.log("   selectedDoctor:", selectedDoctor);
-        console.log("   isBookingModalOpen:", isBookingModalOpen);
+        console.log("   selectedDoctor:", selectedDoctor);
+        console.log("   isBookingModalOpen:", isBookingModalOpen);
     }, [selectedDoctor, isBookingModalOpen]);
 
     const bookAppointmentMutation = useMutation({
@@ -219,6 +235,24 @@ export default function PatientPortal() {
                         </div>
 
                         <nav className="space-y-2">
+                            {/* ✅ NEW: Notifications Tab */}
+                            <Button
+                                variant={activeTab === "notifications" ? "default" : "ghost"}
+                                className="w-full justify-start relative"
+                                onClick={() => setActiveTab("notifications")}
+                            >
+                                <Bell className="w-4 h-4 mr-3" />
+                                Notifications
+                                {unreadCount > 0 && (
+                                    <Badge 
+                                        className="ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center p-0 text-xs"
+                                        variant="default"
+                                    >
+                                        {unreadCount}
+                                    </Badge>
+                                )}
+                            </Button>
+
                             <Button
                                 variant={activeTab === "profile" ? "default" : "ghost"}
                                 className="w-full justify-start"
@@ -281,6 +315,13 @@ export default function PatientPortal() {
 
                 {/* Main Content */}
                 <div className="flex-1 p-8">
+                    {/* ✅ NEW: Notifications Tab Content */}
+                    {activeTab === "notifications" && (
+                        <div data-testid="notifications-content">
+                            <PatientNotificationDashboard />
+                        </div>
+                    )}
+
                     {activeTab === "search" && (
                         <div data-testid="search-content">
                             <div className="mb-8">
