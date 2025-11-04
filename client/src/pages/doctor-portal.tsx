@@ -64,7 +64,7 @@ interface Appointment {
   patientName?: string;
   appointmentDate: string;
   duration: number;
-  type: "video" | "in-person";  // ✅ Fixed
+  type: "video" | "in-person";
   status: "scheduled" | "completed" | "cancelled" | "no-show";
   consultationFee: number;
   notes?: string;
@@ -104,21 +104,58 @@ export default function DoctorPortal() {
   }
 
   const {
-  data: profile,
-  isLoading: profileLoading,
-  refetch: refetchProfile,
-} = useQuery<DoctorProfile>({
-  queryKey: ["/api/doctor/profile"],
-  staleTime: 10000, // ✅ Cache expires after 10 seconds
-  refetchOnWindowFocus: true, // ✅ Auto-refetch when user switches tabs
-  refetchInterval: 30000, // ✅ Poll every 30 seconds
-});
+    data: profile,
+    isLoading: profileLoading,
+    refetch: refetchProfile,
+  } = useQuery<DoctorProfile>({
+    queryKey: ["/api/doctor/profile"],
+    staleTime: 10000, // Cache expires after 10 seconds
+    refetchOnWindowFocus: true, // Auto-refetch when user switches tabs
+    refetchInterval: 30000, // Poll every 30 seconds
+  });
 
-  const { data: appointments = [], refetch: refetchAppointments } = useQuery<
+  const { data: allAppointments = [], refetch: refetchAppointments } = useQuery<
     Appointment[]
   >({
     queryKey: ["/api/appointments"],
+    staleTime: 5000, // Cache for 5 seconds
+    refetchOnWindowFocus: true, // Refetch when user returns to window
   });
+
+  // Filter appointments - backend should already filter by doctor,
+  // but we add frontend filtering as a safety measure
+  const userIdStr = typeof user?.id === 'string' ? user.id : user?._id?.toString?.() || '';
+
+  const appointments = allAppointments.filter((apt) => {
+    // Make sure all appointments belong to this doctor
+    const match = apt.doctorId === userIdStr || 
+                  apt.doctorId === user?.id || 
+                  apt.doctorId === user?._id;
+    return match;
+  });
+
+  console.log(`📋 [Doctor Portal] Appointments Filter:`, {
+    total: allAppointments.length,
+    filtered: appointments.length,
+    userId: userIdStr || user?.id || user?._id,
+    sampleAppointment: allAppointments[0]?.doctorId,
+  });
+
+  // 🐛 FIXED: This is the correct, singular declaration for todayAppointments
+  const todayAppointments = appointments.filter((apt) => {
+    const today = new Date().toDateString();
+    const aptDate = new Date(apt.appointmentDate).toDateString();
+    return aptDate === today && apt.status === "scheduled";
+  });
+
+  // 🐛 FIXED: This is the correct, singular declaration for upcomingAppointments
+  const upcomingAppointments = appointments
+    .filter((apt) => {
+      const now = new Date();
+      const aptDate = new Date(apt.appointmentDate);
+      return aptDate > now && apt.status === "scheduled";
+    })
+    .slice(0, 5);
 
   const profileForm = useForm<ProfileFormDataWithPicture>({
     resolver: zodResolver(
@@ -331,19 +368,10 @@ export default function DoctorPortal() {
     }
   };
 
-  const todayAppointments = appointments.filter((apt) => {
-    const today = new Date().toDateString();
-    const aptDate = new Date(apt.appointmentDate).toDateString();
-    return aptDate === today && apt.status === "scheduled";
-  });
-
-  const upcomingAppointments = appointments
-    .filter((apt) => {
-      const now = new Date();
-      const aptDate = new Date(apt.appointmentDate);
-      return aptDate > now && apt.status === "scheduled";
-    })
-    .slice(0, 5);
+  // 🗑️ REMOVED THE DUPLICATE DECLARATION HERE:
+  // const todayAppointments = appointments.filter((apt) => { ... });
+  // const upcomingAppointments = appointments.filter((apt) => { ... }).slice(0, 5);
+  // The first definitions (lines 85-98) are now the only ones.
 
   const totalPatients = new Set(appointments.map((apt) => apt.patientId)).size;
   const completedAppointments = appointments.filter(
