@@ -88,6 +88,26 @@
 }
 
 @layer base {
+  @keyframes scroll-left {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      /* Moves the 200% wide SVG 50% to the left, which is one full cycle */
+      transform: translateX(-50%);
+    }
+  }
+  @layer components {
+  .heartbeat-container {
+    /* This ensures the animation doesn't cause a horizontal scrollbar */
+    width: 100%;
+    overflow-x: hidden;
+  }
+  .heartbeat-svg {
+    /* Applies the infinite animation */
+    animation: scroll-left 8s linear infinite;
+  }
+}
   * {
     @apply border-border;
   }

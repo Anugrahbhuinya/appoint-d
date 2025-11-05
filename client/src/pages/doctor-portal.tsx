@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; // --- MODIFIED --- (Added useEffect)
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import Navigation from "@/components/navigation";
 import AppointmentStatusManager from "@/components/appointment-status-manager";
 import AvailabilityManager from "@/components/availability-manager";
 import DocumentUpload from "@/components/document-upload";
-import { DoctorNotificationDashboard } from "@/components/doctor-notification-dashboard";;// <<-- NEW IMPORT
+import { DoctorNotificationDashboard } from "@/components/doctor-notification-dashboard"; // <<-- NEW IMPORT
 import {
   Users,
   Calendar,
@@ -36,6 +36,9 @@ import {
   Camera,
   X,
   Bell, // <<-- NEW ICON IMPORT
+  MapPin, // --- ADDED ---
+  Loader2,
+  Plus, // --- ADDED ---
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -56,6 +59,15 @@ interface DoctorProfile {
   rating: number;
   totalReviews: number;
   profilePicture?: string;
+  gender?: 'male' | 'female' | 'other'; // --- MODIFIED ---
+  clinicAddress?: { // --- ADDED ---
+    fullAddress: string;
+    city: string;
+    state: string;
+    pincode: string;
+    lat: string;
+    lon: string;
+  };
 }
 
 interface Appointment {
@@ -77,9 +89,37 @@ interface Appointment {
 // Assuming Notification interface exists in DoctorNotificationDashboard or is defined here
 // interface Notification { _id: string; type: string; message: string; read: boolean; createdAt: string; }
 
-type ProfileFormData = z.infer<typeof insertDoctorProfileSchema>;
+// --- MODIFIED: Added gender and clinicAddress to form schema ---
+const DoctorProfileFormSchema = insertDoctorProfileSchema.omit({ userId: true }).extend({
+  profilePicture: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
+  clinicAddress: z.object({
+    fullAddress: z.string().min(1, "Address is required"),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    pincode: z.string().optional(),
+    lat: z.string().optional(),
+    lon: z.string().optional(),
+  }).optional(),
+});
 
-type ProfileFormDataWithPicture = ProfileFormData & { profilePicture?: string };
+type ProfileFormData = z.infer<typeof DoctorProfileFormSchema>;
+
+// --- ADDED: New type for address suggestions ---
+interface AddressSuggestion {
+  place_id: string;
+  display_name: string;
+  lat: string;
+  lon: string;
+  address: {
+    city?: string;
+    town?: string;
+    village?: string;
+    state?: string;
+    postcode?: string;
+  };
+}
+
 
 export default function DoctorPortal() {
   const { user, logoutMutation } = useAuth();
@@ -91,6 +131,13 @@ export default function DoctorPortal() {
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // --- ADDED: State for address autocomplete ---
+  const [addressSearch, setAddressSearch] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isAddressLoading, setIsAddressLoading] = useState(false);
+  const [isAddressMenuOpen, setIsAddressMenuOpen] = useState(false);
+  // ---
 
   // Redirect if not doctor
   if (user?.role !== "doctor") {
@@ -151,8 +198,8 @@ export default function DoctorPortal() {
   const appointments = allAppointments.filter((apt) => {
     // Make sure all appointments belong to this doctor
     const match = apt.doctorId === userIdStr || 
-              apt.doctorId === user?.id || 
-              apt.doctorId === user?._id;
+                  apt.doctorId === user?.id || 
+                  apt.doctorId === user?._id;
     return match;
   });
 
@@ -182,29 +229,82 @@ export default function DoctorPortal() {
     .sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime()) // Sort by date
     .slice(0, 5); // Limit to 5 for the dashboard summary
 
-  const profileForm = useForm<ProfileFormDataWithPicture>({
-    resolver: zodResolver(
-      insertDoctorProfileSchema.omit({ userId: true }).extend({
-        profilePicture: z.string().optional(),
-      })
-    ),
-    defaultValues: profile
-      ? {
-          ...profile,
-          qualifications: profile.qualifications || [],
-          profilePicture: profile.profilePicture || "",
-        }
-      : {
-          specialization: "",
-          experience: 0,
-          consultationFee: 500,
-          bio: "",
-          qualifications: [],
-          hospitalAffiliation: "",
-          licenseNumber: "",
-          profilePicture: "",
-        },
+  // --- MODIFIED: Use the new schema and include 'gender' & 'clinicAddress' ---
+  const profileForm = useForm<ProfileFormData>({
+    resolver: zodResolver(DoctorProfileFormSchema),
+    // Set default values from the fetched profile, or empty strings/defaults
+    defaultValues: {
+      specialization: "",
+      experience: 0,
+      consultationFee: 500,
+      bio: "",
+      qualifications: [],
+      hospitalAffiliation: "",
+      licenseNumber: "",
+      profilePicture: "",
+      gender: undefined,
+      clinicAddress: undefined, // <-- ADDED
+      ...profile, // Apply fetched profile over defaults
+      qualifications: profile?.qualifications || [], // Ensure arrays are not null
+      profilePicture: profile?.profilePicture || "",
+      gender: profile?.gender || undefined,
+      clinicAddress: profile?.clinicAddress || undefined, // <-- ADDED
+    },
+    // This 'values' prop ensures the form state updates when the 'profile' query refetches
+    values: profile ? {
+      ...profile,
+      gender: profile.gender || undefined,
+      qualifications: profile.qualifications || [],
+      profilePicture: profile.profilePicture || "",
+      clinicAddress: profile?.clinicAddress || undefined, // <-- ADDED
+    } : undefined,
   });
+
+  // --- MODIFIED: Watch the gender value from the form ---
+  const watchedGender = profileForm.watch("gender");
+
+  // --- ADDED: Effect to sync address search bar on load ---
+  useEffect(() => {
+    if (profile?.clinicAddress?.fullAddress && !addressSearch) {
+      setAddressSearch(profile.clinicAddress.fullAddress);
+    }
+  }, [profile, addressSearch]);
+
+  // --- ADDED: Debounced effect for address search ---
+  useEffect(() => {
+    if (!addressSearch || addressSearch.trim().length < 3 || !isAddressMenuOpen) {
+      setAddressSuggestions([]);
+      setIsAddressLoading(false);
+      return;
+    }
+
+    if (addressSearch === profile?.clinicAddress?.fullAddress) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    setIsAddressLoading(true);
+    const id = setTimeout(async () => {
+      try {
+        const q = encodeURIComponent(addressSearch);
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${q}&countrycodes=in&addressdetails=1&limit=5`;
+        
+        const res = await fetch(url, { headers: { "User-Agent": "appointd-app/1.0" } });
+        if (!res.ok) throw new Error("Nominatim API failed");
+        
+        const data = await res.json();
+        setAddressSuggestions(data as AddressSuggestion[]);
+      } catch (err) {
+        console.error("Failed to fetch address suggestions:", err);
+        setAddressSuggestions([]);
+      } finally {
+        setIsAddressLoading(false);
+      }
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(id);
+  }, [addressSearch, profile?.clinicAddress?.fullAddress, isAddressMenuOpen]);
+  // ---
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -292,7 +392,7 @@ export default function DoctorPortal() {
   };
 
   const createProfileMutation = useMutation({
-    mutationFn: async (data: ProfileFormDataWithPicture) => {
+    mutationFn: async (data: ProfileFormData) => { // --- MODIFIED type
       // Convert to JSON with Base64 picture
       const payload = {
         ...data,
@@ -334,7 +434,7 @@ export default function DoctorPortal() {
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: Partial<ProfileFormDataWithPicture>) => {
+    mutationFn: async (data: Partial<ProfileFormData>) => { // --- MODIFIED type
       const payload = {
         ...data,
         profilePicture: data.profilePicture || null,
@@ -379,7 +479,7 @@ export default function DoctorPortal() {
     },
   });
 
-  const onProfileSubmit = (data: ProfileFormDataWithPicture) => {
+  const onProfileSubmit = (data: ProfileFormData) => { // --- MODIFIED type
     // Add the Base64 preview to the data
     const dataWithPicture = {
       ...data,
@@ -483,6 +583,15 @@ export default function DoctorPortal() {
             </div>
 
             <nav className="space-y-2">
+              <Button
+                variant={activeTab === "profile" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveTab("profile")}
+                data-testid="button-profile"
+              >
+                <Users className="w-4 h-4 mr-3" />
+                Profile
+              </Button>
               {/* <--- START NEW NOTIFICATIONS BUTTON ---> */}
               <Button
                 variant={activeTab === "notifications" ? "default" : "ghost"}
@@ -510,15 +619,7 @@ export default function DoctorPortal() {
                 <TrendingUp className="w-4 h-4 mr-3" />
                 Dashboard
               </Button>
-              <Button
-                variant={activeTab === "profile" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setActiveTab("profile")}
-                data-testid="button-profile"
-              >
-                <Users className="w-4 h-4 mr-3" />
-                Profile
-              </Button>
+              
               <Button
                 variant={activeTab === "appointments" ? "default" : "ghost"}
                 className="w-full justify-start"
@@ -545,6 +646,15 @@ export default function DoctorPortal() {
               >
                 <FileText className="w-4 h-4 mr-3" />
                 Documents
+              </Button>
+              <Button
+                variant={activeTab === "appoint'd plus" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveTab("appoint'd plus")}
+                data-testid="button-appoint'd plus"
+              >
+                <Plus className="w-4 h-4 mr-3" />
+                Appoint'd Plus
               </Button>
             </nav>
 
@@ -786,36 +896,146 @@ export default function DoctorPortal() {
                     <CardTitle>Professional Information</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {/* --- ADDED: Clinic Address Input --- */}
+                    <div className="relative space-y-1">
+                      <Label htmlFor="clinicAddress">Clinic Address</Label>
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          id="clinicAddress"
+                          type="text"
+                          placeholder="Start typing your clinic address..."
+                          className="pl-10"
+                          value={addressSearch}
+                          onChange={(e) => {
+                            setAddressSearch(e.target.value);
+                            setIsAddressMenuOpen(true);
+                            // Clear the full form value if they start typing again
+                            if (profileForm.getValues("clinicAddress")) {
+                              profileForm.setValue("clinicAddress", undefined, { shouldValidate: true });
+                            }
+                          }}
+                          onFocus={() => setIsAddressMenuOpen(true)}
+                          onBlur={() => {
+                            // Delay closing to allow clicks on suggestions
+                            setTimeout(() => setIsAddressMenuOpen(false), 150);
+                          }}
+                        />
+                        {isAddressLoading && (
+                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2" />
+                        )}
+                      </div>
+                      
+                      {/* Suggestions Dropdown */}
+                      {isAddressMenuOpen && (addressSuggestions.length > 0 || isAddressLoading) && (
+                        <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          {isAddressLoading && !addressSuggestions.length && (
+                            <div className="p-3 text-sm text-muted-foreground text-center">Loading...</div>
+                          )}
+                          {addressSuggestions.map((suggestion) => (
+                            <button
+                              key={suggestion.place_id}
+                              type="button"
+                              className="w-full text-left p-3 text-sm hover:bg-muted"
+                              // Use onMouseDown to fire before the input's onBlur
+                              onMouseDown={() => {
+                                const newAddress = {
+                                  fullAddress: suggestion.display_name,
+                                  city: suggestion.address.city || suggestion.address.town || suggestion.address.village || "",
+                                  state: suggestion.address.state || "",
+                                  pincode: suggestion.address.postcode || "",
+                                  lat: suggestion.lat,
+                                  lon: suggestion.lon,
+                                };
+                                
+                                // Set the RHF value
+                                profileForm.setValue("clinicAddress", newAddress, { shouldValidate: true, shouldDirty: true });
+                                // Set the input display value
+                                setAddressSearch(suggestion.display_name);
+                                // Close menu
+                                setIsAddressMenuOpen(false);
+                                setAddressSuggestions([]);
+                              }}
+                            >
+                              {suggestion.display_name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* --- END OF ADDRESS FIX --- */}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* --- ADDED: GENDER SELECTOR --- */}
+                      <div>
+                        <Label htmlFor="gender">Gender</Label>
+                        <Select
+                          // Use RHF's watch and setValue for form control
+                          value={profileForm.watch("gender")}
+                          onValueChange={(value: 'male' | 'female' | 'other') => {
+                            profileForm.setValue("gender", value, { shouldDirty: true });
+                            // If gender is changed AWAY from female, reset specialization
+                            if (value !== 'female' && profileForm.getValues("specialization") === "Female Health Specialist") {
+                              profileForm.setValue("specialization", "", { shouldDirty: true }); // Reset it
+                            }
+                          }}
+                        >
+                          <SelectTrigger data-testid="select-gender">
+                            <SelectValue placeholder="Select your gender" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* --- END OF FIX --- */}
+
                       <div>
                         <Label htmlFor="specialization">Specialization</Label>
                         <Select
                           value={profileForm.watch("specialization")}
                           onValueChange={(value) =>
-                            profileForm.setValue("specialization", value)
+                            profileForm.setValue("specialization", value, { shouldDirty: true })
                           }
                         >
                           <SelectTrigger data-testid="select-specialization">
                             <SelectValue placeholder="Select specialization" />
                           </SelectTrigger>
+                          
+                          {/* --- MODIFIED: CONDITIONAL RENDERING LOGIC --- */}
                           <SelectContent>
-                            <SelectItem value="cardiology">
-                              Cardiology
-                            </SelectItem>
-                            <SelectItem value="neurology">Neurology</SelectItem>
-                            <SelectItem value="dermatology">
-                              Dermatology
-                            </SelectItem>
-                            <SelectItem value="pediatrics">
-                              Pediatrics
-                            </SelectItem>
-                            <SelectItem value="orthopedics">
-                              Orthopedics
-                            </SelectItem>
-                            <SelectItem value="general">
+                            <SelectItem value="General Medicine">
                               General Medicine
                             </SelectItem>
+                            <SelectItem value="Dentist">Dentist</SelectItem>
+                            <SelectItem value="Dermatologist">
+                              Dermatologist
+                            </SelectItem>
+                            <SelectItem value="Pediatrician">
+                              Pediatrician
+                            </SelectItem>
+                            <SelectItem value="Orthopedics">
+                              Orthopedics
+                            </SelectItem>
+                            <SelectItem value="Psychiatirst">
+                              Psychiatrist
+                            </SelectItem>
+                            <SelectItem value="Gynecologist">
+                              Gynecologist
+                            </SelectItem>
+                            
+                            {/* This item only appears if gender is 'female' */}
+                            {watchedGender === 'female' && (
+                              <SelectItem value="Female Health Specialist">
+                                Female Health Specialist
+                              </SelectItem>
+                            )}
                           </SelectContent>
+                          {/* --- END OF FIX --- */}
+
                         </Select>
                       </div>
 
@@ -856,19 +1076,19 @@ export default function DoctorPortal() {
                           {...profileForm.register("licenseNumber")}
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="hospitalAffiliation">
-                        Hospital Affiliation
-                      </Label>
-                      <Input
-                        id="hospitalAffiliation"
-                        type="text"
-                        data-testid="input-hospital"
-                        {...profileForm.register("hospitalAffiliation")}
-                      />
-                    </div>
+                      
+                      <div> 
+                        <Label htmlFor="hospitalAffiliation">
+                          Hospital Affiliation
+                        </Label>
+                        <Input
+                          id="hospitalAffiliation"
+                          type="text"
+                          data-testid="input-hospital"
+                          {...profileForm.register("hospitalAffiliation")}
+                        />
+                      </div>
+                    </div> 
 
                     <div>
                       <Label htmlFor="bio">Bio</Label>
@@ -883,7 +1103,8 @@ export default function DoctorPortal() {
 
                     <Button
                       type="button"
-                      onClick={() => onProfileSubmit(profileForm.getValues())}
+                      // --- MODIFIED: Use RHF's handleSubmit to trigger validation ---
+                      onClick={profileForm.handleSubmit(onProfileSubmit)}
                       disabled={
                         createProfileMutation.isPending ||
                         updateProfileMutation.isPending ||

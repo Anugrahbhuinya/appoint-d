@@ -11,6 +11,8 @@ import { Mail, Phone, MapPin, Clock, Send, MessageCircle, Heart } from "lucide-r
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Link } from "wouter";
+
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -146,8 +148,10 @@ export default function ContactPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
+                    
                     <MessageCircle className="h-5 w-5 text-primary" />
                     <span>Quick Help</span>
+                    
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
