@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import Navigation from "@/components/navigation";
 import DoctorCard from "@/components/doctor-card";
 import { Button } from "@/components/ui/button";
-import { Waves } from "@/components/ui/waves-background";
+{/*import { Waves } from "@/components/ui/waves-background";*/}
 import { LiquidButton } from "@/components/ui/liquid-glass-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
@@ -158,19 +158,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background text-foreground relative">
       <div className="fixed inset-0 z-0 opacity-50">
-        <Waves
-          lineColor="rgba(99, 102, 241, 0.3)"
-          backgroundColor="transparent"
-          waveSpeedX={0.02}
-          waveSpeedY={0.01}
-          waveAmpX={40}
-          waveAmpY={20}
-          friction={0.9}
-          tension={0.01}
-          maxCursorMove={120}
-          xGap={12}
-          yGap={36}
-        />
+        
       </div>
       <Navigation />
 
@@ -301,165 +289,158 @@ export default function HomePage() {
 
           {/* show items in a single row on medium+ screens; use 5 columns when only 5 items present */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8">
-            {/* Period doubts or Pregnancy */}
-            <div className="flex flex-col items-center text-center group">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
-                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
-                  <path d="M50 20 C30 20, 20 35, 20 50 C20 65, 35 75, 50 75 C65 75, 80 65, 80 50 C80 35, 70 20, 50 20 Z" 
-                        stroke="white" strokeWidth="3" fill="rgba(59, 130, 246, 0.3)"/>
-                  <path d="M35 50 Q50 40, 65 50" stroke="white" strokeWidth="3" fill="none"/>
-                  <circle cx="35" cy="50" r="4" fill="rgba(59, 130, 246, 0.6)"/>
-                  <circle cx="65" cy="50" r="4" fill="rgba(59, 130, 246, 0.6)"/>
-                  <path d="M50 75 L50 95" stroke="#EF4444" strokeWidth="4"/>
-                  <circle cx="50" cy="95" r="6" fill="#EF4444"/>
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Dental pain or concern</h3>
-              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
-                CONSULT NOW
-              </Button>
-            </div>
+  
+  {/* 1. Dental pain or concern */}
+  {/* 1. Dental pain or concern */}
+  <div className="flex flex-col items-center text-center group">
+    {/* --- FIX --- */}
+    <div className="w-32 h-32 rounded-full bg-white shadow-md flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200 overflow-hidden">
+      <img
+        src="/images/dental-icon.png" 
+        alt="Dental pain icon"
+        className="w-full h-full object-cover"
+      />
+    </div>
+    {/* --- END OF FIX --- */}
+    <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Dental pain or concern</h3>
+    <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+      CONSULT NOW
+    </Button>
+  </div>
 
-            {/* Acne, pimple or skin issues */}
-            <div className="flex flex-col items-center text-center group">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
-                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
-                  <ellipse cx="50" cy="65" rx="25" ry="35" fill="rgba(59, 130, 246, 0.2)"/>
-                  <ellipse cx="50" cy="50" rx="28" ry="32" fill="gray" opacity="0.3"/>
-                  <path d="M35 35 Q50 30, 65 35" stroke="gray" strokeWidth="2"/>
-                  <circle cx="42" cy="50" r="3" fill="#EF4444"/>
-                  <circle cx="58" cy="50" r="3" fill="#EF4444"/>
-                  <circle cx="50" cy="58" r="3" fill="#EF4444"/>
-                  <circle cx="45" cy="45" r="2" fill="#EF4444"/>
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Acne, pimple or skin issues</h3>
-              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
-                CONSULT NOW
-              </Button>
-            </div>
+  {/* 2. Acne, pimple or skin issues */}
+  <div className="flex flex-col items-center text-center group">
+    {/* --- FIX --- */}
+    <div className="w-32 h-32 rounded-full bg-white shadow-md flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200 overflow-hidden">
+      <img
+        src="/images/skin-icon.png" 
+        alt="Skin issues icon"
+        className="w-full h-full object-cover"
+      />
+    </div>
+    {/* --- END OF FIX --- */}
+    <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Acne, pimple or skin issues</h3>
+    <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+      CONSULT NOW
+    </Button>
+  </div>
 
-           
-            {/* Cold, cough or fever */}
-            <div className="flex flex-col items-center text-center group">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
-                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
-                  <ellipse cx="50" cy="60" rx="22" ry="30" fill="gray" opacity="0.2"/>
-                  <ellipse cx="50" cy="70" rx="20" ry="28" fill="rgba(59, 130, 246, 0.3)"/>
-                  <ellipse cx="50" cy="50" rx="28" ry="32" fill="gray" opacity="0.3"/>
-                  <path d="M35 35 Q50 30, 65 35" stroke="gray" strokeWidth="2"/>
-                  <ellipse cx="48" cy="42" rx="12" ry="14" fill="rgba(255, 165, 0, 0.3)"/>
-                  <path d="M55 42 Q58 40, 60 45 M60 45 Q62 50, 58 52 M58 52 Q54 54, 52 49" 
-                        stroke="#EF4444" strokeWidth="2" fill="none"/>
-                  <circle cx="40" cy="70" r="5" fill="white"/>
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Cold, cough or fever</h3>
-              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
-                CONSULT NOW
-              </Button>
-            </div>
+  
+  {/* 3. Cold, cough or fever */}
+  <div className="flex flex-col items-center text-center group">
+    {/* --- FIX --- */}
+    <div className="w-32 h-32 rounded-full bg-white shadow-md flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200 overflow-hidden">
+      <img
+        src="/images/fever-icon.png" 
+        alt="Cold and fever icon"
+        className="w-full h-full object-cover"
+      />
+    </div>
+    {/* --- END OF FIX --- */}
+    <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Cold, cough or fever</h3>
+    <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+      CONSULT NOW
+    </Button>
+  </div>
 
-            {/* Child not feeling well */}
-            <div className="flex flex-col items-center text-center group">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
-                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
-                  <circle cx="50" cy="45" r="20" fill="#FB923C"/>
-                  <circle cx="50" cy="45" r="18" fill="#FED7AA"/>
-                  <ellipse cx="45" cy="44" rx="2" ry="3" fill="black"/>
-                  <ellipse cx="55" cy="44" rx="2" ry="3" fill="black"/>
-                  <path d="M45 50 Q50 53, 55 50" stroke="black" strokeWidth="2" fill="none"/>
-                  <ellipse cx="50" cy="75" rx="18" ry="22" fill="#9333EA"/>
-                  <path d="M35 70 Q40 75, 35 80 M65 70 Q60 75, 65 80" stroke="#C084FC" strokeWidth="3"/>
-                  <ellipse cx="50" cy="62" rx="8" ry="10" fill="#EF4444"/>
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Child not feeling well</h3>
-              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
-                CONSULT NOW
-              </Button>
-            </div>
+  {/* 4. Child not feeling well */}
+  <div className="flex flex-col items-center text-center group">
+    {/* --- FIX --- */}
+    <div className="w-32 h-32 rounded-full bg-white shadow-md flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200 overflow-hidden">
+      <img
+        src="/images/child-icon.png" 
+        alt="Pediatrics icon"
+        className="w-full h-full object-cover"
+      />
+    </div>
+    {/* --- END OF FIX --- */}
+    <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Child not feeling well</h3>
+    <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+      CONSULT NOW
+    </Button>
+  </div>
 
-            {/* Depression or anxiety */}
-            <div className="flex flex-col items-center text-center group">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200">
-                <svg className="w-20 h-20" viewBox="0 0 100 100" fill="none">
-                  <path d="M50 20 Q30 15, 20 35 Q20 55, 35 60 Q30 50, 35 40 Q40 30, 50 30 Q60 30, 65 40 Q70 50, 65 60 Q80 55, 80 35 Q70 15, 50 20 Z" 
-                        fill="#FED7AA"/>
-                  <rect x="20" y="20" width="60" height="35" rx="10" fill="none" stroke="white" strokeWidth="2"/>
-                  <path d="M40 28 L60 28 M40 35 L60 35 M40 42 L55 42" stroke="white" strokeWidth="3"/>
-                  <ellipse cx="50" cy="75" rx="18" ry="22" fill="#FED7AA"/>
-                  <ellipse cx="40" cy="44" rx="3" ry="3" fill="#FED7AA"/>
-                  <ellipse cx="60" cy="44" rx="3" ry="3" fill="#FED7AA"/>
-                  <path d="M38 47 Q43 52, 38 57" stroke="#EF4444" strokeWidth="2" fill="none"/>
-                  <circle cx="50" cy="48" r="8" fill="rgba(255, 200, 200, 0.5)"/>
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Depression or anxiety</h3>
-              <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
-                CONSULT NOW
-              </Button>
-            </div>
-          </div>
+  {/* 5. Depression or anxiety */}
+  <div className="flex flex-col items-center text-center group">
+    {/* --- FIX --- */}
+    <div className="w-32 h-32 rounded-full bg-white shadow-md flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-200 overflow-hidden">
+      <img
+        src="/images/mental-health-icon.png" 
+        alt="Mental health icon"
+        className="w-full h-full object-cover"
+      />
+    </div>
+    {/* --- END OF FIX --- */}
+    <h3 className="text-sm font-semibold text-foreground/90 mb-2 max-w-[8rem] mx-auto">Depression or anxiety</h3>
+    <Button variant="link" className="text-blue-500 text-xs font-medium underline-offset-4 p-0 h-auto">
+      CONSULT NOW
+    </Button>
+  </div>
+
+</div>
         </div>
       </section>
 
       {/* Features Section */}
       <section className="py-20 bg-card/30" data-testid="features-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Comfortaa' }}>Why Choose appoint'd?</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Your health is our priority. We provide comprehensive healthcare solutions with cutting-edge technology.
-            </p>
-          </div>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="text-center mb-16">
+      <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Comfortaa' }}>Why Choose appoint'd?</h2>
+      <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+        Your health is our priority. We provide comprehensive healthcare solutions with cutting-edge technology.
+      </p>
+    </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: Users,
-                title: "Verified Doctors",
-                description: "All our healthcare professionals are verified and licensed practitioners with proven expertise.",
-              },
-              {
-                icon: Video,
-                title: "Video Consultations", 
-                description: "High-quality video calls with secure, HIPAA-compliant technology for remote consultations.",
-              },
-              {
-                icon: Heart,
-                title: "Digital Records",
-                description: "Secure storage and easy access to your medical records, prescriptions, and health data.",
-              },
-              {
-                icon: Clock,
-                title: "Flexible Scheduling",
-                description: "Book, reschedule, or cancel appointments easily with our intelligent scheduling system.",
-              },
-              {
-                icon: Shield,
-                title: "Secure & Private",
-                description: "End-to-end encryption and compliance with healthcare privacy regulations for your safety.",
-              },
-              {
-                icon: DollarSign,
-                title: "Secure Payments",
-                description: "Multiple payment options with secure processing and transparent pricing.",
-              },
-            ].map((feature, index) => (
-              <Card key={index} className="backdrop-blur-sm bg-card/80 hover:shadow-lg transition-all duration-200" data-testid={`feature-card-${index}`}>
-                <CardContent className="p-6">
-                  <div className="bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-                    <feature.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                  <p className="text-muted-foreground">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {[
+        {
+          icon: Users,
+          title: "Verified Doctors",
+          description: "All our healthcare professionals are verified and licensed practitioners with proven expertise.",
+        },
+        {
+          icon: Video,
+          title: "Video Consultations", 
+          description: "High-quality video calls with secure, HIPAA-compliant technology for remote consultations.",
+        },
+        {
+          icon: Heart,
+          title: "Digital Records",
+          description: "Secure storage and easy access to your medical records, prescriptions, and health data.",
+        },
+        {
+          icon: Clock,
+          title: "Flexible Scheduling",
+          description: "Book, reschedule, or cancel appointments easily with our intelligent scheduling system.",
+        },
+        {
+          icon: Shield,
+          title: "Secure & Private",
+          description: "End-to-end encryption and compliance with healthcare privacy regulations for your safety.",
+        },
+        {
+          icon: DollarSign,
+          title: "Secure Payments",
+          description: "Multiple payment options with secure processing and transparent pricing.",
+        },
+      ].map((feature, index) => (
+        <Card key={index} className="backdrop-blur-sm bg-card/80 hover:shadow-lg transition-all duration-200" data-testid={`feature-card-${index}`}>
+          
+          {/* --- FIX IS HERE --- */}
+          <CardContent className="p-4"> {/* Reduced padding */}
+            <div className="bg-primary/10 w-10 h-10 rounded-lg flex items-center justify-center mb-3"> {/* Reduced size & margin */}
+              <feature.icon className="h-5 w-5 text-primary" /> {/* Reduced icon size */}
+            </div>
+            <h3 className="text-lg font-semibold mb-2">{feature.title}</h3> {/* Reduced font size & margin */}
+            <p className="text-sm text-muted-foreground">{feature.description}</p> {/* Reduced font size */}
+          </CardContent>
+          {/* --- END OF FIX --- */}
+
+        </Card>
+      ))}
+    </div>
+  </div>
+</section>
 
       {/* Featured Doctors Section */}
       {featuredDoctors.length > 0 && (
@@ -477,17 +458,19 @@ export default function HomePage() {
             </div>
 
             <div className="text-center mt-8">
-              <Link href={user ? "/patient" : "/auth"}>
-                <LiquidButton variant="outline" data-testid="button-view-all-doctors">
-                  View All Doctors
-                </LiquidButton>
-              </Link>
+            <Link href={user ? "/patient" : "/auth"} data-testid="button-view-all-doctors">
+           <button
+            className="bg-white text-black text-sm font-semibold hover:bg-gray-200 rounded-full px-5 py-2"
+             >
+             View All Doctors
+             </button>
+            </Link>
             </div>
           </div>
         </section>
       )}
 
-      {/* Stats Section */}
+      {/* Stats Section 
       <section className="py-16 bg-card/30" data-testid="stats-section">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
@@ -517,7 +500,7 @@ export default function HomePage() {
             </Card>
           </div>
         </div>
-      </section>
+      </section>*/}
 
       {/* Footer */}
       <footer className="bg-background border-t border-border py-12" data-testid="footer">

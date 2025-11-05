@@ -98,22 +98,7 @@ const DoctorCard = forwardRef<HTMLDivElement, DoctorCardProps>(({ doctor, onBook
               >
                 Book Appointment
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                data-testid={`button-video-${doctor.id}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Video className="w-4 h-4" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                data-testid={`button-chat-${doctor.id}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MessageCircle className="w-4 h-4" />
-              </Button>
+              
             </div>
           </div>
         </div>

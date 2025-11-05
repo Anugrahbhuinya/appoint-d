@@ -97,14 +97,11 @@ export default function Navigation() {
                 <Link href="/auth">
                   <Button variant="ghost" size="sm" data-testid="button-login">
                     <User className="h-4 w-4 mr-2" />
-                    Login
+                    Get Started
                   </Button>
                 </Link>
-                <Link href="/auth">
-                  <Button size="sm" data-testid="button-signup">
-                    Sign Up
-                  </Button>
-                </Link>
+                
+               
               </>
             )}
 
