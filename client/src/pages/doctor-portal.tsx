@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AppointdPlusDoctor } from "@/components/AppointdPlusDoctor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +39,8 @@ import {
   Bell, // <<-- NEW ICON IMPORT
   MapPin, // --- ADDED ---
   Loader2,
-  Plus, // --- ADDED ---
+  Plus,
+  Zap // --- ADDED ---
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -648,12 +650,12 @@ export default function DoctorPortal() {
                 Documents
               </Button>
               <Button
-                variant={activeTab === "appoint'd plus" ? "default" : "ghost"}
+                variant={activeTab === "plus" ? "default" : "ghost"}
                 className="w-full justify-start"
-                onClick={() => setActiveTab("appoint'd plus")}
-                data-testid="button-appoint'd plus"
+                onClick={() => setActiveTab("plus")}
+                data-testid="button-plus"
               >
-                <Plus className="w-4 h-4 mr-3" />
+                <Zap className="w-4 h-4 mr-3" />
                 Appoint'd Plus
               </Button>
             </nav>
@@ -1283,6 +1285,11 @@ export default function DoctorPortal() {
               <DocumentUpload />
             </div>
           )}
+          {activeTab === "plus" && (
+        <div data-testid="plus-content">
+          <AppointdPlusDoctor />
+        </div>
+      )}
         </div>
       </div>
     </div>
