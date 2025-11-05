@@ -11,7 +11,7 @@ import { Heart, Video, Shield, Users, Clock, DollarSign, MapPin, ShieldCheck, Br
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { HeartbeatAnimation } from "@/components/ui/HeartbeatAnimation"; // --- 1. ADDITION: IMPORTED HEARTBEAT COMPONENT ---
-
+import Spline from '@splinetool/react-spline';
 interface Doctor {
   id: string;
   firstName: string;
@@ -168,6 +168,9 @@ export default function HomePage() {
   };
 
   return (
+    
+
+    
     <div className="min-h-screen bg-background text-foreground relative">
       <div className="fixed inset-0 z-0 opacity-50">
         
