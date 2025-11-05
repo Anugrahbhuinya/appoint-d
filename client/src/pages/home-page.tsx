@@ -382,7 +382,7 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-card/30" data-testid="features-section">
+     <section className="py-20 bg-card/30" data-testid="features-section">
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div className="text-center mb-16">
       <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Comfortaa' }}>Why Choose appoint'd?</h2>
@@ -424,15 +424,36 @@ export default function HomePage() {
           description: "Multiple payment options with secure processing and transparent pricing.",
         },
       ].map((feature, index) => (
-        <Card key={index} className="backdrop-blur-sm bg-card/80 hover:shadow-lg transition-all duration-200" data-testid={`feature-card-${index}`}>
-          
-          {/* --- FIX IS HERE --- */}
-          <CardContent className="p-4"> {/* Reduced padding */}
-            <div className="bg-primary/10 w-10 h-10 rounded-lg flex items-center justify-center mb-3"> {/* Reduced size & margin */}
-              <feature.icon className="h-5 w-5 text-primary" /> {/* Reduced icon size */}
+        
+        /* --- HOVER EFFECT FIX IS HERE ---
+          - Added 'cursor-pointer'
+          - Changed 'duration-200' to 'duration-300' for a smoother feel
+          - Changed 'hover:shadow-lg' to 'hover:shadow-xl' for more "pop"
+          - Added 'hover:-translate-y-1' for the lift effect
+          - Added 'hover:shadow-primary/10' for the subtle colored glow
+        */
+        <Card 
+          key={index} 
+          className="cursor-pointer backdrop-blur-sm bg-card/80 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:shadow-primary/10" 
+          data-testid={`feature-card-${index}`}
+        >
+
+          {/* --- LAYOUT FIX IS HERE --- */}
+          <CardContent className="p-6">
+            {/* 1. This is a new flex container to hold the icon and text block */}
+            <div className="flex items-start gap-4">
+              
+              {/* 2. This is the icon block */}
+              <div className="bg-primary/10 w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                <feature.icon className="h-5 w-5 text-primary" />
+              </div>
+              
+              {/* 3. This new div holds the title and description */}
+              <div>
+                <h3 className="text-lg font-semibold mb-1">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground">{feature.description}</p>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold mb-2">{feature.title}</h3> {/* Reduced font size & margin */}
-            <p className="text-sm text-muted-foreground">{feature.description}</p> {/* Reduced font size */}
           </CardContent>
           {/* --- END OF FIX --- */}
 
