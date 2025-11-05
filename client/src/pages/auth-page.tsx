@@ -220,15 +220,7 @@ export default function AuthPage() {
                   Doctor Portal
                 </Button>
                 
-                <Button 
-                  variant={selectedPortal === "admin" ? "default" : "outline"}
-                  className="w-full justify-start"
-                  data-testid="button-admin-portal"
-                  onClick={() => handlePortalSelection("admin")}
-                >
-                  <UserCog className="mr-3 h-4 w-4" />
-                  Admin Portal
-                </Button>
+                
               </div>
             )}
             
@@ -430,14 +422,7 @@ export default function AuthPage() {
             
             {/* Debug button - remove in production */}
             <div className="mt-4 text-center">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={clearAllData}
-                className="text-xs"
-              >
-                Clear All Data & Reset
-              </Button>
+              
             </div>
           </CardContent>
         </Card>
