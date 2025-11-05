@@ -21,6 +21,7 @@ import Navigation from "@/components/navigation";
 import AppointmentStatusManager from "@/components/appointment-status-manager";
 import AvailabilityManager from "@/components/availability-manager";
 import DocumentUpload from "@/components/document-upload";
+import { DoctorNotificationDashboard } from "@/components/doctor-notification-dashboard";;// <<-- NEW IMPORT
 import {
   Users,
   Calendar,
@@ -34,6 +35,7 @@ import {
   TrendingUp,
   Camera,
   X,
+  Bell, // <<-- NEW ICON IMPORT
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -64,13 +66,16 @@ interface Appointment {
   patientName?: string;
   appointmentDate: string;
   duration: number;
-  type: "video" | "in-person";  // ✅ Fixed
-  status: "scheduled" | "completed" | "cancelled" | "no-show";
+  type: "video" | "in-person";
+  status: "scheduled" | "completed" | "cancelled" | "no-show" | "awaiting_payment" | "confirmed"; // Updated status list
   consultationFee: number;
   notes?: string;
   prescription?: string;
   createdAt: string;
 }
+
+// Assuming Notification interface exists in DoctorNotificationDashboard or is defined here
+// interface Notification { _id: string; type: string; message: string; read: boolean; createdAt: string; }
 
 type ProfileFormData = z.infer<typeof insertDoctorProfileSchema>;
 
@@ -102,23 +107,80 @@ export default function DoctorPortal() {
       </div>
     );
   }
+  
+  // ------------------------------------------------------------------
+  // 1. FETCH NOTIFICATIONS
+  // ------------------------------------------------------------------
+  const { data: notifications = [] } = useQuery<any[]>({
+    queryKey: ["/api/doctor/notifications"], // Use a doctor-specific endpoint
+    queryFn: async () => {
+      const res = await fetch("/api/doctor/notifications");
+      if (!res.ok) throw new Error("Failed to fetch doctor notifications");
+      return res.json();
+    },
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+  
+  const unreadCount = notifications.filter((n: any) => !n.read).length;
+  // ------------------------------------------------------------------
 
   const {
-  data: profile,
-  isLoading: profileLoading,
-  refetch: refetchProfile,
-} = useQuery<DoctorProfile>({
-  queryKey: ["/api/doctor/profile"],
-  staleTime: 10000, // ✅ Cache expires after 10 seconds
-  refetchOnWindowFocus: true, // ✅ Auto-refetch when user switches tabs
-  refetchInterval: 30000, // ✅ Poll every 30 seconds
-});
+    data: profile,
+    isLoading: profileLoading,
+    refetch: refetchProfile,
+  } = useQuery<DoctorProfile>({
+    queryKey: ["/api/doctor/profile"],
+    staleTime: 10000, // Cache expires after 10 seconds
+    refetchOnWindowFocus: true, // Auto-refetch when user switches tabs
+    refetchInterval: 30000, // Poll every 30 seconds
+  });
 
-  const { data: appointments = [], refetch: refetchAppointments } = useQuery<
+  const { data: allAppointments = [], refetch: refetchAppointments } = useQuery<
     Appointment[]
   >({
     queryKey: ["/api/appointments"],
+    staleTime: 5000, // Cache for 5 seconds
+    refetchOnWindowFocus: true, // Refetch when user returns to window
   });
+
+  // Filter appointments - backend should already filter by doctor,
+  // but we add frontend filtering as a safety measure
+  const userIdStr = typeof user?.id === 'string' ? user.id : user?._id?.toString?.() || '';
+
+  const appointments = allAppointments.filter((apt) => {
+    // Make sure all appointments belong to this doctor
+    const match = apt.doctorId === userIdStr || 
+              apt.doctorId === user?.id || 
+              apt.doctorId === user?._id;
+    return match;
+  });
+
+  console.log(`📋 [Doctor Portal] Appointments Filter:`, {
+    total: allAppointments.length,
+    filtered: appointments.length,
+    userId: userIdStr || user?.id || user?._id,
+    sampleAppointment: allAppointments[0]?.doctorId,
+  });
+
+  // 🐛 FIXED: This is the correct, singular declaration for todayAppointments
+  const todayAppointments = appointments.filter((apt) => {
+    const today = new Date().toDateString();
+    const aptDate = new Date(apt.appointmentDate).toDateString();
+    // Include scheduled and confirmed for today
+    return aptDate === today && (apt.status === "scheduled" || apt.status === "confirmed");
+  });
+
+  // 🐛 FIXED: This is the correct, singular declaration for upcomingAppointments
+  const upcomingAppointments = appointments
+    .filter((apt) => {
+      const now = new Date();
+      const aptDate = new Date(apt.appointmentDate);
+      // Include scheduled, confirmed, and awaiting_payment for upcoming
+      return aptDate > now && (apt.status === "scheduled" || apt.status === "confirmed" || apt.status === "awaiting_payment");
+    })
+    .sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime()) // Sort by date
+    .slice(0, 5); // Limit to 5 for the dashboard summary
 
   const profileForm = useForm<ProfileFormDataWithPicture>({
     resolver: zodResolver(
@@ -331,19 +393,6 @@ export default function DoctorPortal() {
     }
   };
 
-  const todayAppointments = appointments.filter((apt) => {
-    const today = new Date().toDateString();
-    const aptDate = new Date(apt.appointmentDate).toDateString();
-    return aptDate === today && apt.status === "scheduled";
-  });
-
-  const upcomingAppointments = appointments
-    .filter((apt) => {
-      const now = new Date();
-      const aptDate = new Date(apt.appointmentDate);
-      return aptDate > now && apt.status === "scheduled";
-    })
-    .slice(0, 5);
 
   const totalPatients = new Set(appointments.map((apt) => apt.patientId)).size;
   const completedAppointments = appointments.filter(
@@ -434,6 +483,24 @@ export default function DoctorPortal() {
             </div>
 
             <nav className="space-y-2">
+              {/* <--- START NEW NOTIFICATIONS BUTTON ---> */}
+              <Button
+                variant={activeTab === "notifications" ? "default" : "ghost"}
+                className="w-full justify-start relative"
+                onClick={() => setActiveTab("notifications")}
+              >
+                <Bell className="w-4 h-4 mr-3" />
+                Notifications
+                {unreadCount > 0 && (
+                  <Badge 
+                    className="ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center p-0 text-xs"
+                    variant="default"
+                  >
+                    {unreadCount}
+                  </Badge>
+                )}
+              </Button>
+              {/* <--- END NEW NOTIFICATIONS BUTTON ---> */}
               <Button
                 variant={activeTab === "dashboard" ? "default" : "ghost"}
                 className="w-full justify-start"
@@ -496,6 +563,21 @@ export default function DoctorPortal() {
 
         {/* Main Content */}
         <div className="flex-1 p-8">
+          {/* <--- START NEW NOTIFICATIONS TAB CONTENT ---> */}
+          {activeTab === "notifications" && (
+            <div data-testid="notifications-content">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2">My Notifications</h1>
+                <p className="text-muted-foreground">
+                  View and manage updates about your practice
+                </p>
+              </div>
+              {/* Pass the fetched notifications to the dedicated dashboard component */}
+              <DoctorNotificationDashboard notifications={notifications} /> 
+            </div>
+          )}
+          {/* <--- END NEW NOTIFICATIONS TAB CONTENT ---> */}
+
           {activeTab === "dashboard" && (
             <div data-testid="dashboard-content">
               <div className="mb-8">
@@ -849,10 +931,10 @@ export default function DoctorPortal() {
                 </TabsList>
 
                 <TabsContent value="upcoming" className="space-y-4">
-                  {appointments.filter((apt) => apt.status === "scheduled")
+                  {appointments.filter((apt) => apt.status === "scheduled" || apt.status === "confirmed" || apt.status === "awaiting_payment")
                     .length > 0 ? (
                     appointments
-                      .filter((apt) => apt.status === "scheduled")
+                      .filter((apt) => apt.status === "scheduled" || apt.status === "confirmed" || apt.status === "awaiting_payment")
                       .map((appointment) => (
                         <AppointmentStatusManager
                           key={appointment._id}

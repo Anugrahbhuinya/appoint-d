@@ -1119,6 +1119,7 @@ app.post("/api/appointments", async (req, res) => {
 // ===================================
 
 // POST /api/notifications - Create & send notification
+// POST /api/notifications - Create & send notification
 app.post("/api/notifications", async (req, res) => {
   try {
     const {
@@ -1130,17 +1131,20 @@ app.post("/api/notifications", async (req, res) => {
       appointmentDate,
       consultationFee,
       doctorId,
-      notificationChannels = ["email", "inapp"],
+      notificationChannels, // Get the value, even if it's null or undefined
     } = req.body;
+
+    // ✅ FIX: Create a guaranteed array, using the default if the provided value is null or undefined
+    const finalChannels = notificationChannels || ["email", "inapp"];
 
     if (!recipientId || !type || !title || !message) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    console.log(`📢 [POST /api/notifications]`);
+    console.log('📢 [POST /api/notifications]');
     console.log(`   Type: ${type}`);
     console.log(`   Recipient: ${recipientId}`);
-    console.log(`   Channels: ${notificationChannels.join(", ")}`);
+    console.log(`   Channels: ${finalChannels.join(", ")}`); // Use finalChannels
 
     // Get recipient user info
     const recipient = await storage.getUser(recipientId);
@@ -1157,34 +1161,34 @@ app.post("/api/notifications", async (req, res) => {
       appointmentId: appointmentId || null,
       read: false,
       createdAt: new Date(),
-      notificationChannels,
+      notificationChannels: finalChannels, // Use finalChannels
       consultationFee,
       appointmentDate,
       doctorId,
     });
 
-    console.log(`✅ In-app notification created`);
+    console.log('✅ In-app notification created');
 
     // Send EMAIL if requested
-    if (notificationChannels.includes("email")) {
+    if (finalChannels.includes("email")) { // Use finalChannels
       try {
         console.log(`   📧 Email queued for ${recipient.email}`);
         // TODO: Implement actual email sending here
         // Example providers: Nodemailer, SendGrid, etc.
       } catch (error) {
-        console.error(`⚠️  Email sending failed:`, error);
+        console.error('⚠️ Email sending failed:', error);
       }
     }
 
     // Send IN-APP notification (already done by creating notification record)
-    if (notificationChannels.includes("inapp")) {
+    if (finalChannels.includes("inapp")) { // Use finalChannels
       console.log(`   🔔 In-app notification saved`);
     }
 
     res.status(201).json({
       success: true,
       notification,
-      message: "Notification sent via " + notificationChannels.join(" and "),
+      message: "Notification sent via " + finalChannels.join(" and "), // Use finalChannels
     });
   } catch (error: any) {
     console.error("❌ POST /api/notifications failed:", error);
@@ -1264,6 +1268,95 @@ app.delete("/api/notifications/:id", async (req, res) => {
 // ===================================
 // END NOTIFICATION ROUTES
 // ==================================
+
+
+// ===================================
+// DOCTOR CONFIRM APPOINTMENT (NEW)
+// ===================================
+
+// POST /api/doctor/confirm-appointment-ready/:appointmentId
+app.post("/api/doctor/confirm-appointment-ready/:appointmentId", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
+
+    const appointmentId = req.params.appointmentId;
+    const doctorId = req.user!._id.toString();
+
+    console.log(`\n📞 [POST /api/doctor/confirm-appointment-ready]`);
+    console.log(`   appointmentId: ${appointmentId}`);
+    console.log(`   doctorId: ${doctorId}`);
+
+    // Get appointment
+    const appointment = await storage.getAppointment(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+
+    // Verify ownership
+    if (appointment.doctorId !== doctorId) {
+      return res.status(403).json({ message: "This appointment is not yours" });
+    }
+
+    console.log(`✅ Verified: appointment belongs to doctor`);
+
+    // Get patient and doctor info
+    const patient = await storage.getUser(appointment.patientId);
+    const doctor = await storage.getUser(doctorId);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    console.log(`   Patient: ${patient.firstName} ${patient.lastName}`);
+    console.log(`   Doctor: ${doctor?.firstName} ${doctor?.lastName}`);
+
+    // Update appointment status to "awaiting_payment"
+    await storage.updateAppointment(appointmentId, { 
+      status: "awaiting_payment" 
+    });
+
+    console.log(`✅ Appointment status updated to: awaiting_payment`);
+
+    // Create notification for patient
+    const notification = await storage.createNotification({
+      recipientId: appointment.patientId,
+      type: "payment_pending",
+      title: `Dr. ${doctor?.firstName} ${doctor?.lastName} is Ready!`,
+      message: `Your appointment is scheduled. Please complete the payment of ₹${appointment.consultationFee} to confirm.`,
+      appointmentId,
+      appointmentDate: appointment.appointmentDate,
+      consultationFee: appointment.consultationFee,
+      doctorId,
+      read: false,
+      createdAt: new Date(),
+      notificationChannels: ["email", "inapp"],
+    });
+
+    console.log(`✅ In-app notification created: ${notification._id}`);
+    console.log(`   Notification sent to patient at: ${patient.email}`);
+
+    res.json({
+      success: true,
+      message: "Patient has been notified. They can now proceed with payment.",
+      appointment: await storage.getAppointment(appointmentId),
+    });
+
+  } catch (error: any) {
+    console.error(`❌ Error confirming appointment:`, error.message);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ===================================
+// END DOCTOR CONFIRM APPOINTMENT
+// ===================================
+
 
   // Payment Routes
   app.post("/api/create-order", async (req, res) => {
@@ -1477,40 +1570,62 @@ app.delete("/api/notifications/:id", async (req, res) => {
 
   //delete document doctor route
   app.delete("/api/doctor/documents/:id", async (req, res) => {
-    try {
-        if (!req.isAuthenticated()) {
-            return res.status(401).json({ message: "Authentication required" });
-        }
-        
-        const documentId = req.params.id;
-        
-        // FIX: Need a way to retrieve the document to check ownership. Assuming storage has getDoctorDocumentById
-        const document = await (storage as any).getDoctorDocumentById(documentId); 
-
-        if (!document) {
-            return res.status(404).json({ message: "Document not found" });
-        }
-        
-        // Authorization check
-        if (document.doctorId !== req.user!._id.toString()) {
-            return res.status(403).json({ message: "Access denied" });
-        }
-        
-        // Delete document (database and file system)
-        const deletedDoc = await storage.deleteDoctorDocument(documentId);
-
-        if (deletedDoc) {
-            return res.json({ message: "Document deleted successfully" });
-        } else {
-            // This indicates a failure at the DB/FS level after the ownership check
-            return res.status(500).json({ message: "Failed to delete document from database." });
-        }
-
-    } catch (error: any) {
-        console.error("❌ DELETE /api/doctor/documents/:id failed:", error);
-        res.status(500).json({ message: "Failed to delete document." });
-    }
-  });
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
+    
+    const documentId = req.params.id;
+    
+    console.log(`\n🗑️  [DELETE /api/doctor/documents/:id]`);
+    console.log(`   documentId: ${documentId}`);
+    console.log(`   doctorId: ${req.user!._id.toString()}`);
+    
+    // Get all documents for this doctor
+    const allDocuments = await storage.getDoctorDocuments(req.user!._id.toString());
+    
+    // Find the specific document
+    const document = allDocuments.find((doc: any) => doc._id.toString() === documentId);
+    
+    if (!document) {
+      console.log(`❌ Document not found`);
+      return res.status(404).json({ message: "Document not found" });
+    }
+    
+    // Verify ownership
+    const docDoctorId = document.doctorId instanceof Object 
+      ? document.doctorId.toString() 
+      : document.doctorId;
+    
+    if (docDoctorId !== req.user!._id.toString()) {
+      console.log(`❌ Access denied - document belongs to different doctor`);
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    console.log(`   Found document: ${document.fileName}`);
+    
+    // Delete from storage (which handles both file and DB deletion)
+    console.log(`   Calling storage.deleteDoctorDocument...`);
+    const deletedDoc = await storage.deleteDoctorDocument(documentId);
+    
+    if (!deletedDoc) {
+      console.log(`❌ Failed to delete from storage`);
+      return res.status(500).json({ message: "Failed to delete document from database" });
+    }
+    
+    console.log(`✅ Document deleted successfully`);
+    return res.json({ message: "Document deleted successfully", documentId });
+    
+  } catch (error: any) {
+    console.error(`❌ DELETE /api/doctor/documents/:id failed:`, error.message);
+    console.error(`   Stack:`, error.stack);
+    res.status(500).json({ message: error.message || "Failed to delete document" });
+  }
+});
   // ===================================
 
   app.get("/api/doctor/documents", async (req, res) => {

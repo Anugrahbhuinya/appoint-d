@@ -3,6 +3,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
+import { Notification } from "../shared/mongodb-schema";
 import {
   User,
   DoctorProfile,
@@ -190,7 +191,68 @@ async getDoctorsWithProfiles(): Promise<(User & { profile: DoctorProfile })[]> {
   // === DOCTOR DOCUMENT METHODS (omitted for brevity) ===
   async createDoctorDocument(document: InsertDoctorDocument) { const doc = new DoctorDocument(document); return await doc.save(); }
   async getDoctorDocuments(doctorId: string) { return await DoctorDocument.find({ doctorId }); }
-  async deleteDoctorDocument(documentId: string): Promise<DoctorDocument | null> { const doc = await DoctorDocument.findById(documentId); if (!doc) return null; try { await fs.unlink(doc.filePath); console.log(`Successfully deleted physical file: ${doc.filePath}`); } catch (err: any) { if (err.code !== 'ENOENT') { console.error(`Failed to delete physical file ${doc.filePath}:`, err); } else { console.warn(`Physical file not found: ${doc.filePath}`); } } const deletedDoc = await DoctorDocument.findByIdAndDelete(documentId); return deletedDoc; }
+  
+  async deleteDoctorDocument(documentId: string): Promise<DoctorDocument | null> {
+  try {
+    console.log(`\n🗑️ [deleteDoctorDocument in storage]`);
+    console.log(`   documentId: ${documentId}`);
+    
+    // Find the document first
+    let doc;
+    try {
+      doc = await DoctorDocument.findById(documentId);
+    } catch (dbErr: any) {
+      console.error(`   ❌ Error finding document:`, dbErr.message);
+      return null;
+    }
+    
+    if (!doc) {
+      console.log(`   ❌ Document not found in database`);
+      return null;
+    }
+    
+    console.log(`   Found document: ${doc.fileName}`);
+    console.log(`   File path: ${doc.filePath}`);
+    
+    // Try to delete the physical file if it exists
+    if (doc.filePath) {
+      try {
+        console.log(`   Attempting to delete file: ${doc.filePath}`);
+        await fs.unlink(doc.filePath);
+        console.log(`   ✅ Physical file deleted successfully`);
+      } catch (fileErr: any) {
+        // Log but don't fail - we still want to delete the DB record
+        if (fileErr.code === 'ENOENT') {
+          console.warn(`   ⚠️ Physical file not found (already deleted): ${doc.filePath}`);
+        } else {
+          console.warn(`   ⚠️ Could not delete physical file (${fileErr.code}): ${fileErr.message}`);
+        }
+        // Continue - don't re-throw
+      }
+    }
+    
+    // Delete from database
+    console.log(`   Deleting from MongoDB...`);
+    let deletedDoc;
+    try {
+      deletedDoc = await DoctorDocument.findByIdAndDelete(documentId);
+      if (deletedDoc) {
+        console.log(`   ✅ Document record deleted from database`);
+      } else {
+        console.warn(`   ⚠️ Document was not deleted (might have been deleted already)`);
+      }
+    } catch (dbDeleteErr: any) {
+      console.error(`   ❌ Error deleting from database:`, dbDeleteErr.message);
+      throw dbDeleteErr;
+    }
+    
+    return deletedDoc;
+  } catch (error: any) {
+    console.error(`   ❌ Error in deleteDoctorDocument:`, error.message);
+    console.error(`   Stack:`, error.stack);
+    throw error;
+  }
+}
   async updateDoctorDocument(id: string, updates: Partial<DoctorDocument>) { const doc = await DoctorDocument.findByIdAndUpdate(id, updates, { new: true }); if (!doc) throw new Error("Doctor document not found"); return doc; }
   async getAllPendingDocuments() { return await DoctorDocument.find({ isVerified: false }); }
 
