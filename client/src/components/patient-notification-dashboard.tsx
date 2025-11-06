@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Bell, Mail, CheckCircle2, AlertCircle, Loader2, Trash2, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+// Interface definitions (as provided)
 interface Notification {
   _id: string;
   recipientId: string;
@@ -33,8 +34,8 @@ export function PatientNotificationDashboard() {
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [doctorsMap, setDoctorsMap] = useState<Map<string, Doctor>>(new Map());
 
-  // 🔄 Fetch notifications
-  const { data: notifications = [], isLoading, error, refetch } = useQuery({
+  // 🔄 Fetch notifications (unchanged)
+  const { data: notifications = [], isLoading, error } = useQuery({
     queryKey: ['/api/notifications'],
     queryFn: async () => {
       const res = await fetch('/api/notifications');
@@ -45,7 +46,7 @@ export function PatientNotificationDashboard() {
     refetchIntervalInBackground: true,
   });
 
-  // 🔄 Fetch doctors to get their names
+  // 🔄 Fetch doctors (unchanged)
   const { data: doctors = [] } = useQuery({
     queryKey: ['/api/doctors'],
     queryFn: async () => {
@@ -56,7 +57,7 @@ export function PatientNotificationDashboard() {
     refetchInterval: 30000,
   });
 
-  // 📊 Build doctors map for quick lookup
+  // 📊 Build doctors map (unchanged)
   useEffect(() => {
     const newMap = new Map<string, Doctor>();
     doctors.forEach((doc: any) => {
@@ -70,11 +71,11 @@ export function PatientNotificationDashboard() {
     setDoctorsMap(newMap);
   }, [doctors]);
 
-  // 📊 Calculate stats
+  // 📊 Calculate stats (unchanged)
   const unreadCount = notifications.filter((n) => !n.read).length;
   const pendingPayments = notifications.filter((n) => n.type === 'payment_pending' && !n.read);
 
-  // ✅ Mark as read
+  // ✅ Mark as read (unchanged)
   const markAsRead = async (notificationId: string) => {
     try {
       const res = await fetch(`/api/notifications/${notificationId}`, {
@@ -100,7 +101,7 @@ export function PatientNotificationDashboard() {
     }
   };
 
-  // 🗑️ Delete notification
+  // 🗑️ Delete notification (unchanged)
   const deleteNotification = async (notificationId: string) => {
     try {
       const res = await fetch(`/api/notifications/${notificationId}`, {
@@ -125,49 +126,67 @@ export function PatientNotificationDashboard() {
     }
   };
 
-  // 🎨 Get notification style based on type with vibrant colors
+  // 🎨 === THEME FIX ===
+  // Get notification style based on portal's theme
   const getNotificationStyle = (type: string, read: boolean) => {
-    if (type === 'payment_pending') {
+    // Read messages are always muted
+    if (read) {
       return {
-        bgClass: read ? 'bg-orange-50 border-orange-200' : 'bg-gradient-to-r from-orange-100 to-amber-100 border-2 border-orange-400',
-        icon: <AlertCircle className="w-5 h-5 text-orange-600" />,
-        badge: 'Payment Pending',
-        badgeColor: 'bg-orange-500',
+        cardClass: 'bg-card opacity-70',
+        icon: <Bell className="w-5 h-5 text-muted-foreground" />,
+        iconColor: 'text-muted-foreground',
+        badgeVariant: 'secondary' as const,
+        badgeText: 'Notification',
       };
     }
-    if (type === 'appointment_confirmed') {
-      return {
-        bgClass: read ? 'bg-emerald-50 border-emerald-200' : 'bg-gradient-to-r from-emerald-100 to-teal-100 border-2 border-emerald-400',
-        icon: <CheckCircle2 className="w-5 h-5 text-emerald-600" />,
-        badge: 'Confirmed',
-        badgeColor: 'bg-emerald-500',
-      };
+
+    // Unread messages
+    switch (type) {
+      case 'payment_pending':
+        return {
+          cardClass: 'bg-destructive/10 border-destructive/20',
+          icon: <AlertCircle className="w-5 h-5 text-destructive" />,
+          iconColor: 'text-destructive',
+          badgeVariant: 'destructive' as const,
+          badgeText: 'Payment Pending',
+        };
+      case 'appointment_confirmed':
+        // Uses green, consistent with "Active Patient" badge in sidebar
+        return {
+          cardClass: 'bg-green-500/10 border-green-500/20',
+          icon: <CheckCircle2 className="w-5 h-5 text-green-600" />,
+          iconColor: 'text-green-600',
+          badgeVariant: 'secondary' as const,
+          badgeText: 'Confirmed',
+        };
+      case 'appointment_scheduled':
+        return {
+          cardClass: 'bg-primary/10 border-primary/20',
+          icon: <Bell className="w-5 h-5 text-primary" />,
+          iconColor: 'text-primary',
+          badgeVariant: 'default' as const,
+          badgeText: 'Scheduled',
+        };
+      case 'appointment_cancelled':
+        return {
+          cardClass: 'bg-destructive/10 border-destructive/20',
+          icon: <AlertCircle className="w-5 h-5 text-destructive" />,
+          iconColor: 'text-destructive',
+          badgeVariant: 'destructive' as const,
+          badgeText: 'Cancelled',
+        };
+      default:
+        return {
+          cardClass: 'bg-card/80 border-border',
+          icon: <Bell className="w-5 h-5 text-muted-foreground" />,
+          iconColor: 'text-muted-foreground',
+          badgeVariant: 'secondary' as const,
+          badgeText: 'Notification',
+        };
     }
-    if (type === 'appointment_scheduled') {
-      return {
-        bgClass: read ? 'bg-blue-50 border-blue-200' : 'bg-gradient-to-r from-blue-100 to-cyan-100 border-2 border-blue-400',
-        icon: <Bell className="w-5 h-5 text-blue-600" />,
-        badge: 'Scheduled',
-        badgeColor: 'bg-blue-500',
-      };
-    }
-    if (type === 'appointment_cancelled') {
-      return {
-        bgClass: read ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-red-100 to-pink-100 border-2 border-red-400',
-        icon: <AlertCircle className="w-5 h-5 text-red-600" />,
-        badge: 'Cancelled',
-        badgeColor: 'bg-red-500',
-      };
-    }
-    return {
-      bgClass: read ? 'bg-gray-50 border-gray-200' : 'bg-gradient-to-r from-gray-100 to-slate-100 border-2 border-gray-400',
-      icon: <Bell className="w-5 h-5 text-gray-600" />,
-      badge: 'Notification',
-      badgeColor: 'bg-gray-500',
-    };
   };
 
-  // 👨‍⚕️ Get doctor name from doctorId
+  // 👨‍⚕️ Get doctor name (unchanged)
   const getDoctorName = (doctorId?: string) => {
     if (!doctorId) return 'Doctor';
     const doctor = doctorsMap.get(doctorId);
@@ -177,7 +196,7 @@ export function PatientNotificationDashboard() {
     return 'Doctor';
   };
 
-  // 📅 Format date
+  // 📅 Format date (unchanged)
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -196,9 +215,9 @@ export function PatientNotificationDashboard() {
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
+      <Card className="border-destructive/20 bg-destructive/10">
         <CardContent className="pt-6">
-          <p className="text-red-600">Failed to load notifications</p>
+          <p className="text-destructive">Failed to load notifications</p>
         </CardContent>
       </Card>
     );
@@ -206,37 +225,30 @@ export function PatientNotificationDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Bell className="w-6 h-6" />
-            Notifications
-          </h2>
-          {unreadCount > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              You have <span className="font-semibold text-blue-600">{unreadCount} unread</span> notification{unreadCount !== 1 ? 's' : ''}
-            </p>
-          )}
-        </div>
+      {/* 🎨 === HEADER FIX: Matched to other portal tabs === */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+          <Bell className="w-7 h-7" />
+          Notifications
+        </h1>
         {unreadCount > 0 && (
-          <Badge variant="secondary" className="text-base px-3 py-1 bg-red-500 text-white">
-            {unreadCount} New
-          </Badge>
+          <p className="text-muted-foreground">
+            You have <span className="font-semibold text-primary">{unreadCount} unread</span> notification{unreadCount !== 1 ? 's' : ''}
+          </p>
         )}
       </div>
 
-      {/* Alert for pending payments */}
+      {/* 🎨 === ALERT FIX: Using theme colors === */}
       {pendingPayments.length > 0 && (
-        <Card className="border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50">
+        <Card className="border-destructive/20 bg-destructive/10">
           <CardContent className="pt-6">
             <div className="flex gap-3">
-              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-orange-900">
+                <p className="font-semibold text-destructive">
                   {pendingPayments.length} Payment{pendingPayments.length !== 1 ? 's' : ''} Pending
                 </p>
-                <p className="text-sm text-orange-800">
+                <p className="text-sm text-destructive/80">
                   Complete your appointment payment to confirm your booking
                 </p>
               </div>
@@ -269,57 +281,59 @@ export function PatientNotificationDashboard() {
             return (
               <Card
                 key={notification._id}
-                className={`cursor-pointer transition-all ${style.bgClass} ${
-                  isSelected ? 'ring-2 ring-offset-2 ring-blue-500 shadow-lg' : 'hover:shadow-md'
+                className={`cursor-pointer transition-all border ${style.cardClass} ${
+                  isSelected ? 'ring-2 ring-offset-2 ring-primary shadow-lg' : 'hover:shadow-md'
                 }`}
                 onClick={() => setSelectedNotification(isSelected ? null : notification)}
               >
                 <CardContent className="pt-6">
                   <div className="flex gap-4">
                     {/* Icon */}
-                    <div className="flex-shrink-0 mt-1">{style.icon}</div>
+                    <div className={`flex-shrink-0 mt-1 ${style.iconColor}`}>{style.icon}</div>
 
                     {/* Content */}
                     <div className="flex-grow min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-grow">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-bold text-sm leading-tight">
+                            <h3 className="font-bold text-sm leading-tight text-foreground">
                               {notification.title}
                             </h3>
                           </div>
                           {/* 👨‍⚕️ Doctor Name */}
                           <div className="flex items-center gap-1 mb-2">
-                            <User className="w-3 h-3 text-gray-500" />
-                            <p className="text-xs font-medium text-gray-600">
+                            <User className="w-3 h-3 text-muted-foreground" />
+                            <p className="text-xs font-medium text-muted-foreground">
                               {doctorName}
                             </p>
                           </div>
-                          <p className="text-sm text-gray-700 line-clamp-2">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {notification.message}
                           </p>
                         </div>
+                        {/* 🎨 === UNREAD DOT FIX: Using primary color === */}
                         {!notification.read && (
-                          <div className={`w-3 h-3 rounded-full flex-shrink-0 mt-1 ${style.badgeColor}`} />
+                          <div className="w-2.5 h-2.5 bg-primary rounded-full flex-shrink-0 mt-1" />
                         )}
                       </div>
 
                       {/* Metadata */}
                       <div className="flex flex-wrap gap-2 mt-3">
-                        <Badge variant="outline" className={`text-xs text-white border-0 ${style.badgeColor}`}>
-                          {style.badge}
+                        <Badge variant={style.badgeVariant} className="text-xs">
+                          {style.badgeText}
                         </Badge>
 
                         {/* Channels */}
                         <div className="flex gap-1">
+                          {/* 🎨 === THEME FIX: Using standard secondary badge === */}
                           {notification.notificationChannels.includes('email') && (
-                            <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
+                            <Badge variant="secondary" className="text-xs">
                               <Mail className="w-3 h-3 mr-1" />
                               Email
                             </Badge>
                           )}
                           {notification.notificationChannels.includes('inapp') && (
-                            <Badge variant="secondary" className="text-xs bg-indigo-100 text-indigo-700">
+                            <Badge variant="secondary" className="text-xs">
                               <Bell className="w-3 h-3 mr-1" />
                               In-app
                             </Badge>
@@ -333,34 +347,33 @@ export function PatientNotificationDashboard() {
 
                       {/* Expanded details */}
                       {isSelected && (
-                        <div className="mt-4 pt-4 border-t border-gray-300 space-y-3">
+                        <div className="mt-4 pt-4 border-t border-border space-y-3">
                           {notification.appointmentDate && (
                             <div>
-                              <p className="text-xs font-semibold text-gray-600">Appointment Date & Time</p>
-                              <p className="text-sm font-medium">
-                                {new Date(notification.appointmentDate).toLocaleString()}
+                              <p className="text-xs font-semibold text-muted-foreground">Appointment Date & Time</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {new Date(notification.appointmentDate).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
                               </p>
                             </div>
                           )}
 
                           {notification.consultationFee && (
                             <div>
-                              <p className="text-xs font-semibold text-gray-600">Consultation Fee</p>
+                              <p className="text-xs font-semibold text-muted-foreground">Consultation Fee</p>
                               <p className="text-lg font-bold text-green-600">
                                 ₹{notification.consultationFee}
                               </p>
                             </div>
                           )}
 
-                          {/* Full Doctor Info */}
                           <div>
-                            <p className="text-xs font-semibold text-gray-600">Doctor</p>
-                            <p className="text-sm font-medium">
+                            <p className="text-xs font-semibold text-muted-foreground">Doctor</p>
+                            <p className="text-sm font-medium text-foreground">
                               {doctorName}
                             </p>
                           </div>
 
-                          {/* Actions */}
+                          {/* Actions (unchanged, style is good) */}
                           <div className="flex gap-2 pt-2">
                             {!notification.read && (
                               <Button
@@ -378,7 +391,7 @@ export function PatientNotificationDashboard() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deleteNotification(notification._id);
