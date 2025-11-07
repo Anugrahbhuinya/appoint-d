@@ -994,7 +994,7 @@ app.post("/api/appointments", async (req, res) => {
             appointmentDate: appointmentDateTime,
             duration: 30, 
             type,
-            status: 'scheduled',
+            status: 'pending',
             consultationFee: consultationFee || doctorProfile.consultationFee,
             notes: notes || ''
         });
@@ -1022,7 +1022,9 @@ app.post("/api/appointments", async (req, res) => {
         appointments = await storage.getAppointmentsByPatient(req.user!._id.toString());
       } else if (req.user!.role === "doctor") {
         // FIX: Ensure ID is a string when calling storage
-        appointments = await storage.getAppointmentsByDoctor(req.user!._id.toString());
+        appointments = (await storage.getAppointmentsByDoctor(req.user!._id.toString()))
+  .filter((a: any) => a.status === "scheduled");
+
       } else if (req.user!.role === "admin") {
         appointments = await storage.getAllAppointments();
       } else {
@@ -1112,6 +1114,36 @@ app.post("/api/appointments", async (req, res) => {
       res.status(400).json({ message: error.message });
     }
   });
+
+
+// ✅ Doctor’s Pending Appointment Requests
+app.get("/api/doctor/notifications", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (req.user!.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access required" });
+    }
+
+    const doctorId = req.user!._id.toString();
+
+    // Fetch all pending or awaiting payment appointments
+    const pendingAppointments = await storage.getAppointmentsByDoctor(doctorId);
+
+    const filtered = pendingAppointments.filter(
+      (a: any) =>
+        a.status === "pending" ||
+        a.status === "awaiting_payment"
+    );
+
+    res.json(filtered);
+  } catch (error: any) {
+    console.error("❌ GET /api/doctor/notifications failed:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
 
 
 // ===================================
@@ -1317,9 +1349,10 @@ app.post("/api/doctor/confirm-appointment-ready/:appointmentId", async (req, res
     console.log(`   Doctor: ${doctor?.firstName} ${doctor?.lastName}`);
 
     // Update appointment status to "awaiting_payment"
-    await storage.updateAppointment(appointmentId, { 
-      status: "awaiting_payment" 
-    });
+   if (appointment.status !== "pending") {
+  return res.status(400).json({ message: "Only pending appointments can be confirmed." });
+}
+await storage.updateAppointment(appointmentId, { status: "awaiting_payment" });
 
     console.log(`✅ Appointment status updated to: awaiting_payment`);
 

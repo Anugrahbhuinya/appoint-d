@@ -62,8 +62,9 @@ export function DoctorScheduleButton({
   doctorId, 
   consultationFee, 
   appointmentDate,
-  currentStatus = 'scheduled'
-}: DoctorScheduleButtonProps) {
+  currentStatus = 'scheduled',
+  onScheduleSuccess 
+}: DoctorScheduleButtonProps  & { onScheduleSuccess?: () => void } ) {
   const [open, setOpen] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const { toast } = useToast();
@@ -121,6 +122,7 @@ export function DoctorScheduleButton({
       // Invalidate queries to refresh
       queryClient.invalidateQueries({ queryKey: ['/api/appointments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      onScheduleSuccess?.();
       setOpen(false);
     } catch (err: unknown) {
       console.error('❌ Scheduling error:', err);
