@@ -3,14 +3,12 @@ import { useAuth } from "@/hooks/use-auth";
 import Navigation from "@/components/navigation";
 import DoctorCard from "@/components/doctor-card";
 import { Button } from "@/components/ui/button";
-{/*import { Waves } from "@/components/ui/waves-background";*/}
-import { LiquidButton } from "@/components/ui/liquid-glass-button";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { Heart, Video, Shield, Users, Clock, DollarSign, MapPin, ShieldCheck, BrainCircuit, Lock, Search as SearchIcon } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { Input } from "@/components/ui/input";
-import { HeartbeatAnimation } from "@/components/ui/HeartbeatAnimation"; 
+import { Input } from "@/components/ui/input"; 
 
 interface Doctor {
   id: string;
