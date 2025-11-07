@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import Navigation from "@/components/navigation";
 import DoctorCard from "@/components/doctor-card";
 import AppointmentCard from "@/components/appointment-card";
@@ -16,6 +15,7 @@ import AppointmentBookingModal from "@/components/appointment-booking-modal";
 import PatientProfileManager from "@/components/patient-profile-manager";
 import HealthRecordsManager from "@/components/health-records-manager";
 import { PatientNotificationDashboard } from "@/components/patient-notification-dashboard";
+import { Calendar as DayPickerCalendar } from "@/components/ui/calendar";
 import { 
     Search, 
     Calendar, 
@@ -26,6 +26,7 @@ import {
     Clock,
     Bell
 } from "lucide-react";
+import { format } from "date-fns";
 
 interface Doctor {
     id: string;
@@ -68,7 +69,6 @@ export default function PatientPortal() {
         availability: "any",
     });
     const { toast } = useToast();
-    const queryClient = useQueryClient();
 
     // ✅ Fetch unread notifications count
     const { data: notifications = [] } = useQuery({
@@ -172,39 +172,68 @@ export default function PatientPortal() {
         console.log("   isBookingModalOpen:", isBookingModalOpen);
     }, [selectedDoctor, isBookingModalOpen]);
 
-    const bookAppointmentMutation = useMutation({
-        mutationFn: async (appointmentData: any) => {
-            const res = await apiRequest("POST", "/api/appointments", appointmentData);
-            return res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
-            toast({
-                title: "Appointment Booked",
-                description: "Your appointment has been scheduled successfully.",
-            });
-            setIsBookingModalOpen(false);
-        },
-        onError: (error: Error) => {
-            toast({
-                title: "Booking Failed",
-                description: error.message,
-                variant: "destructive",
-            });
-        },
-    });
-
-    const upcomingAppointments = appointments.filter(apt => {
+    const upcomingAppointments = useMemo(() => {
         const now = new Date();
-        const aptDate = new Date(apt.appointmentDate);
-        return aptDate > now && apt.status === "scheduled";
-    });
+        return appointments
+            .filter(apt => {
+                const aptDate = new Date(apt.appointmentDate);
+                return aptDate > now && apt.status === "scheduled";
+            })
+            .sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime());
+    }, [appointments]);
 
-    const pastAppointments = appointments.filter(apt => {
+    const pastAppointments = useMemo(() => {
         const now = new Date();
-        const aptDate = new Date(apt.appointmentDate);
-        return aptDate <= now || apt.status === "completed";
-    });
+        return appointments
+            .filter(apt => {
+                const aptDate = new Date(apt.appointmentDate);
+                return aptDate <= now || apt.status === "completed";
+            })
+            .sort((a, b) => new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime());
+    }, [appointments]);
+
+    const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(() => new Date());
+
+    const appointmentMap = useMemo(() => {
+        const map = new Map<string, Appointment[]>();
+        upcomingAppointments.forEach((appointment) => {
+            const key = format(new Date(appointment.appointmentDate), "yyyy-MM-dd");
+            const existing = map.get(key) ?? [];
+            existing.push(appointment);
+            map.set(key, existing);
+        });
+        return map;
+    }, [upcomingAppointments]);
+
+    const bookedDates = useMemo(() => {
+        return Array.from(appointmentMap.keys()).map((key) => new Date(`${key}T00:00:00`));
+    }, [appointmentMap]);
+
+    const selectedDayAppointments = useMemo(() => {
+        if (!selectedCalendarDate) return [];
+        const key = format(selectedCalendarDate, "yyyy-MM-dd");
+        return appointmentMap.get(key) ?? [];
+    }, [selectedCalendarDate, appointmentMap]);
+
+    useEffect(() => {
+        if (upcomingAppointments.length === 0) {
+            return;
+        }
+        setSelectedCalendarDate((current) => {
+            if (!current) {
+                return new Date(upcomingAppointments[0].appointmentDate);
+            }
+
+            const currentKey = format(current, "yyyy-MM-dd");
+            if (appointmentMap.has(currentKey)) {
+                return current;
+            }
+
+            return new Date(upcomingAppointments[0].appointmentDate);
+        });
+    }, [upcomingAppointments, appointmentMap]);
+
+    const nextAppointment = useMemo(() => upcomingAppointments[0] ?? null, [upcomingAppointments]);
 
     return (
         <div className="min-h-screen bg-background">
@@ -406,42 +435,174 @@ export default function PatientPortal() {
                                 </CardContent>
                             </Card>
 
-                            {/* Doctor Results */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {doctorsLoading ? (
-                                    Array.from({ length: 4 }).map((_, i) => (
-                                        <Card key={`skeleton-${i}`} className="animate-pulse">
-                                            <CardContent className="p-6">
-                                                <div className="flex items-start space-x-4">
-                                                    <div className="w-16 h-16 bg-muted rounded-full" />
-                                                    <div className="flex-1 space-y-2">
-                                                        <div className="h-4 bg-muted rounded w-3/4" />
-                                                        <div className="h-3 bg-muted rounded w-1/2" />
-                                                        <div className="h-3 bg-muted rounded w-full" />
-                                                    </div>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    ))
-                                ) : doctors.length > 0 ? (
-                                    doctors.map((doctor) => (
-                                        <DoctorCard 
-                                            key={doctor.id} 
-                                            doctor={doctor}
-                                            onBookAppointment={handleBookAppointment}
-                                        />
-                                    ))
-                                ) : (
-                                    <div className="col-span-2">
-                                        <Card>
-                                            <CardContent className="text-center py-12">
-                                                <Search className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                                <h3 className="text-lg font-semibold mb-2">No doctors found</h3>
-                                                <p className="text-muted-foreground">Try adjusting your search filters</p>
-                                            </CardContent>
-                                        </Card>
+                            {/* Doctor Results & Calendar */}
+                            <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                <div>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {doctorsLoading ? (
+                                            Array.from({ length: 4 }).map((_, i) => (
+                                                <Card key={`skeleton-${i}`} className="animate-pulse">
+                                                    <CardContent className="p-6">
+                                                        <div className="flex items-start space-x-4">
+                                                            <div className="w-16 h-16 bg-muted rounded-full" />
+                                                            <div className="flex-1 space-y-2">
+                                                                <div className="h-4 bg-muted rounded w-3/4" />
+                                                                <div className="h-3 bg-muted rounded w-1/2" />
+                                                                <div className="h-3 bg-muted rounded w-full" />
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))
+                                        ) : doctors.length > 0 ? (
+                                            doctors.map((doctor) => (
+                                                <DoctorCard 
+                                                    key={doctor.id} 
+                                                    doctor={doctor}
+                                                    onBookAppointment={handleBookAppointment}
+                                                />
+                                            ))
+                                        ) : (
+                                            <div className="col-span-1 lg:col-span-2">
+                                                <Card>
+                                                    <CardContent className="text-center py-12">
+                                                        <Search className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                                        <h3 className="text-lg font-semibold mb-2">No doctors found</h3>
+                                                        <p className="text-muted-foreground">Try adjusting your search filters</p>
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
+
+                                <div className="space-y-6">
+                                    <Card className="bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70 border-border/60">
+                                        <CardHeader className="pb-4">
+                                            <CardTitle className="text-xl">Appointment Calendar</CardTitle>
+                                            <CardDescription>
+                                                View your scheduled consultations and pick a date before booking.
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <DayPickerCalendar
+                                                mode="single"
+                                                selected={selectedCalendarDate}
+                                                onSelect={setSelectedCalendarDate}
+                                                defaultMonth={selectedCalendarDate ?? new Date()}
+                                                modifiers={{ booked: bookedDates }}
+                                                modifiersClassNames={{
+                                                    booked: "relative after:absolute after:left-1/2 after:top-[70%] after:h-1.5 after:w-1.5 after:-translate-x-1/2 after:rounded-full after:bg-primary",
+                                                }}
+                                                className="rounded-lg border border-border/60"
+                                            />
+
+                                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                <span className="flex items-center gap-2">
+                                                    <span className="h-2 w-2 rounded-full bg-primary" />
+                                                    Scheduled visit
+                                                </span>
+                                                <span className="flex items-center gap-2">
+                                                    <span className="h-2 w-2 rounded-full bg-muted" />
+                                                    Available day
+                                                </span>
+                                            </div>
+
+                                            <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-semibold">
+                                                            {selectedCalendarDate ? format(selectedCalendarDate, "PPP") : "Select a day"}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {selectedDayAppointments.length} {selectedDayAppointments.length === 1 ? "appointment" : "appointments"}
+                                                        </p>
+                                                    </div>
+                                                    <Badge variant="outline" className="text-xs">
+                                                        Upcoming
+                                                    </Badge>
+                                                </div>
+
+                                                {selectedDayAppointments.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {selectedDayAppointments.map((appointment) => {
+                                                            const appointmentDate = new Date(appointment.appointmentDate);
+                                                            const key = appointment.id ?? appointment.appointmentDate;
+
+                                                            return (
+                                                                <div
+                                                                    key={key}
+                                                                    className="flex items-center justify-between rounded-md bg-background/80 px-3 py-2 shadow-sm"
+                                                                >
+                                                                    <div>
+                                                                        <p className="text-sm font-semibold">{format(appointmentDate, "p")}</p>
+                                                                        <p className="text-xs text-muted-foreground capitalize">
+                                                                            {appointment.type} · {appointment.status}
+                                                                        </p>
+                                                                    </div>
+                                                                    <span className="text-xs font-semibold text-primary">₹{appointment.consultationFee}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        No appointments scheduled for this day. Select a slot from the doctors list to book.
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <Button
+                                                variant="outline"
+                                                className="w-full"
+                                                onClick={() => setActiveTab("appointments")}
+                                            >
+                                                <Calendar className="w-4 h-4 mr-2" />
+                                                Go to My Appointments
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="border-border/60 bg-primary/5">
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-lg">Next Upcoming Appointment</CardTitle>
+                                            <CardDescription>
+                                                {nextAppointment
+                                                    ? `${format(new Date(nextAppointment.appointmentDate), "PPP • p")}`
+                                                    : "You don't have any upcoming appointments yet."}
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3 text-sm">
+                                            {nextAppointment ? (
+                                                <>
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <Calendar className="w-4 h-4" />
+                                                        <span>{format(new Date(nextAppointment.appointmentDate), "PPP")}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <Clock className="w-4 h-4" />
+                                                        <span>{format(new Date(nextAppointment.appointmentDate), "p")} · {nextAppointment.type}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <Heart className="w-4 h-4" />
+                                                        <span>Status: {nextAppointment.status}</span>
+                                                    </div>
+                                                    <Button
+                                                        className="w-full"
+                                                        variant="secondary"
+                                                        onClick={() => setActiveTab("appointments")}
+                                                    >
+                                                        Manage Appointment
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <div className="text-muted-foreground">
+                                                    Book an appointment to see it appear here.
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </div>
                             </div>
                         </div>
                     )}

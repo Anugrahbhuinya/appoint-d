@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Clock, Video, User, CreditCard, Calendar as CalendarIcon } from "lucide-react";
-import { format, getISODay } from "date-fns"; 
+import { format, getISODay, addDays, startOfDay } from "date-fns"; 
 
 interface Doctor {
   id: string;
@@ -175,6 +175,67 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
     console.log("   error:", availabilityError);
     console.log("   enabled:", open && isDoctorReady && !!selectedDate);
   }, [isLoading, doctorAvailability, availabilityError, open, isDoctorReady, selectedDate]);
+
+  const { data: availabilitySummary = [] } = useQuery<DoctorAvailability[]>({
+    queryKey: ["/api/doctor/availability-summary", doctorId],
+    queryFn: async () => {
+      if (!isDoctorReady) return [];
+
+      const url = `/api/doctor/availability?doctorId=${doctorId}`;
+      try {
+        const res = await apiRequest("GET", url);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Failed to load availability");
+        }
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("❌ Failed to load availability summary", error);
+        return [];
+      }
+    },
+    enabled: open && isDoctorReady,
+    staleTime: 1000 * 60,
+  });
+
+  const enabledDateKeySet = useMemo(() => {
+    const set = new Set<string>();
+    if (!availabilitySummary.length) return set;
+
+    const startDate = startOfDay(new Date());
+    const horizonDays = 90;
+
+    for (let i = 0; i <= horizonDays; i++) {
+      const date = addDays(startDate, i);
+      const isoDay = getISODay(date);
+      const hasAvailability = availabilitySummary.some(
+        (slot) => slot.isAvailable && slot.dayOfWeek === isoDay
+      );
+
+      if (hasAvailability) {
+        set.add(format(date, "yyyy-MM-dd"));
+      }
+    }
+
+    return set;
+  }, [availabilitySummary]);
+
+  const enabledDateObjects = useMemo(() => {
+    return Array.from(enabledDateKeySet).map((key) => new Date(`${key}T00:00:00`));
+  }, [enabledDateKeySet]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!enabledDateKeySet.size) return;
+
+    if (!selectedDate || !enabledDateKeySet.has(format(selectedDate, "yyyy-MM-dd"))) {
+      const firstKey = Array.from(enabledDateKeySet).sort()[0];
+      if (firstKey) {
+        setSelectedDate(new Date(`${firstKey}T00:00:00`));
+      }
+    }
+  }, [open, enabledDateKeySet, selectedDate]);
   
   const timeSlots = useMemo(() => {
     if (!selectedDate) return [];
@@ -387,18 +448,22 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-start text-left font-normal"
+                    className="w-full justify-start gap-2 rounded-xl border border-border/60 bg-background/85 px-4 py-3 text-left text-sm font-medium shadow-sm transition hover:border-primary/60 hover:bg-primary/10"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto border-none bg-transparent p-0 shadow-none" align="start" sideOffset={12}>
                   <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    disabled={(date) => date < new Date()}
+                    disabled={(date) => !enabledDateKeySet.has(format(date, "yyyy-MM-dd"))}
+                    modifiers={{ available: enabledDateObjects }}
+                    modifiersClassNames={{
+                      available: "relative after:absolute after:bottom-1/2 after:left-1/2 after:h-1.5 after:w-1.5 after:-translate-x-1/2 after:translate-y-3 after:rounded-full after:bg-primary",
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
