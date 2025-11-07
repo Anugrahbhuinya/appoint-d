@@ -10,8 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Heart, Video, Shield, Users, Clock, DollarSign, MapPin, ShieldCheck, BrainCircuit, Lock, Search as SearchIcon } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { HeartbeatAnimation } from "@/components/ui/HeartbeatAnimation"; // --- 1. ADDITION: IMPORTED HEARTBEAT COMPONENT ---
-import Spline from '@splinetool/react-spline';
+import { HeartbeatAnimation } from "@/components/ui/HeartbeatAnimation"; 
+
 interface Doctor {
   id: string;
   firstName: string;
@@ -25,7 +25,7 @@ interface Doctor {
     rating: number;
     totalReviews: number;
     isApproved: boolean;
-    // --- I am re-adding these from our previous chat to ensure your DoctorCard doesn't break ---
+    
     gender?: 'male' | 'female' | 'other';
     clinicAddress?: {
       fullAddress: string;
@@ -35,7 +35,7 @@ interface Doctor {
       lat: string;
       lon: string;
     };
-    // --- End of re-added fields ---
+    
   };
 }
 
@@ -176,8 +176,7 @@ export default function HomePage() {
         
       </div>
 
-      {/* --- 2. ADDITION: RENDERED HEARTBEAT ANIMATION BEHIND CONTENT --- */}
-      <HeartbeatAnimation />
+      
 
       {/* --- 3. ADDITION: WRAPPED ALL CONTENT IN A z-10 CONTAINER --- */}
       <div className="relative z-10"> 
