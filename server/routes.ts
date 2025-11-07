@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { setupAuth, hashPassword } from "./auth";
 import passport from "passport";
 import express from 'express';
+import { format } from "date-fns";
 // FIX 1: Import DoctorAvailability model, and crypto if running without global node access
 import { DoctorAvailability } from "@shared/mongodb-schema"; 
 import crypto from 'crypto'; 
@@ -736,17 +737,28 @@ app.post("/api/doctor/availability", async (req, res) => {
       return res.status(403).json({ message: "Doctor access required" });
     }
 
-    // Validate incoming ISO day (1-7)
-    const incomingDay = req.body.dayOfWeek;
-    if (incomingDay === undefined || incomingDay === null || incomingDay < 1 || incomingDay > 7) {
-      return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7)" });
+    let incomingDay = req.body.dayOfWeek as number | undefined;
+    let normalizedDate: string | undefined;
+
+    if (req.body.specificDate) {
+      const parsedDate = new Date(req.body.specificDate);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ message: "Invalid specificDate" });
+      }
+      normalizedDate = format(parsedDate, "yyyy-MM-dd");
+      incomingDay = convertJsDayToIso(parsedDate.getDay());
     }
 
-    console.log("   Incoming day (ISO):", incomingDay);
+    if (incomingDay === undefined || incomingDay === null || incomingDay < 1 || incomingDay > 7) {
+      return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7) or provide specificDate" });
+    }
+
+    console.log("   Incoming day (ISO):", incomingDay, "specificDate:", normalizedDate);
 
     const availabilityData = insertDoctorAvailabilitySchema.parse({
       ...req.body,
       dayOfWeek: convertIsoToJsDay(incomingDay), // Convert ISO (1-7) to JS (0-6) for storage
+      specificDate: normalizedDate ?? req.body.specificDate,
       doctorId: req.user!._id.toString(),
     });
 
@@ -784,6 +796,7 @@ app.get("/api/doctor/availability", async (req, res) => {
 
     // Support both doctor viewing own availability AND patients querying specific doctor
     let doctorId: string;
+    const dateParam = req.query.date as string | undefined;
     let dayOfWeekParam = req.query.dayOfWeek as string | undefined;
 
     if (req.user!.role === "doctor") {
@@ -799,7 +812,10 @@ app.get("/api/doctor/availability", async (req, res) => {
 
     let availability: any[];
 
-    if (dayOfWeekParam) {
+    if (dateParam) {
+      console.log("   Date-specific query:", dateParam);
+      availability = await (storage as any).getDoctorAvailabilityByDate(doctorId, dateParam);
+    } else if (dayOfWeekParam) {
       // Single-day query
       const isoDayOfWeek = parseInt(dayOfWeekParam, 10);
 
@@ -850,12 +866,23 @@ app.put("/api/doctor/availability/:id", async (req, res) => {
     }
 
     // If updating dayOfWeek, convert from ISO to JS before sending to storage
-    const updates = { ...req.body };
+    const updates: any = { ...req.body };
     if (updates.dayOfWeek !== undefined) {
       if (updates.dayOfWeek < 1 || updates.dayOfWeek > 7) {
         return res.status(400).json({ message: "dayOfWeek must be ISO format (1-7)" });
       }
       updates.dayOfWeek = convertIsoToJsDay(updates.dayOfWeek);
+    }
+
+    if (updates.specificDate) {
+      const parsedDate = new Date(updates.specificDate);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ message: "Invalid specificDate" });
+      }
+      updates.specificDate = format(parsedDate, "yyyy-MM-dd");
+      if (updates.dayOfWeek === undefined) {
+        updates.dayOfWeek = parsedDate.getDay();
+      }
     }
 
     // Use storage layer: it handles update logic

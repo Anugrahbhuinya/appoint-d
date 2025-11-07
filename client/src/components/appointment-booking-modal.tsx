@@ -36,6 +36,7 @@ interface DoctorAvailability {
     startTime: string;
     endTime: string;
     isAvailable: boolean;
+    specificDate?: string;
 }
 
 const isSameDay = (date1: Date, date2: Date) => 
@@ -116,17 +117,15 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
       
       if (!isDoctorReady || !selectedDate) {
         console.warn("⚠️  Early return - missing doctor or date");
-        console.warn("     isDoctorReady:", isDoctorReady, "selectedDate:", selectedDate);
         return [];
       }
       
-      const dayOfWeek = getISODay(selectedDate);
-      const url = `/api/doctor/availability?doctorId=${doctorId}&dayOfWeek=${dayOfWeek}`;
+      const dateKey = format(selectedDate, "yyyy-MM-dd");
+      const url = `/api/doctor/availability?doctorId=${doctorId}&date=${dateKey}`;
       
       console.log("📍 FULL URL:", url);
       console.log("   Doctor ID value:", doctorId);
       console.log("   Date:", format(selectedDate, "PPP"));
-      console.log("   ISO Day value:", dayOfWeek);
       
       try {
         console.log("📡 Making API request to:", url);
@@ -150,12 +149,8 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
           return [];
         }
         
-        if (data.length === 0) {
-          console.warn("⚠️  Empty array returned - doctor has no availability set!");
-        }
-        
         data.forEach((slot: DoctorAvailability, i: number) => {
-          console.log(`   [${i+1}] Day: ${slot.dayOfWeek}, Time: ${slot.startTime}-${slot.endTime}, Available: ${slot.isAvailable}`);
+          console.log(`   [${i+1}] Day: ${slot.dayOfWeek}, Date: ${slot.specificDate ?? "recurring"}, Time: ${slot.startTime}-${slot.endTime}, Available: ${slot.isAvailable}`);
         });
         
         return data;
@@ -203,18 +198,47 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
     const set = new Set<string>();
     if (!availabilitySummary.length) return set;
 
+    const specificMap = new Map<string, { hasAvailable: boolean }>();
+    availabilitySummary
+      .filter((slot) => slot.specificDate)
+      .forEach((slot) => {
+        const key = slot.specificDate!;
+        const entry = specificMap.get(key) ?? { hasAvailable: false };
+        if (slot.isAvailable) {
+          entry.hasAvailable = true;
+        }
+        specificMap.set(key, entry);
+      });
+
+    const blockedSpecific = new Set<string>();
+    specificMap.forEach((value, key) => {
+      if (value.hasAvailable) {
+        set.add(key);
+      } else {
+        blockedSpecific.add(key);
+      }
+    });
+
     const startDate = startOfDay(new Date());
     const horizonDays = 90;
+    const recurringSlots = availabilitySummary.filter(
+      (slot) => !slot.specificDate && slot.isAvailable
+    );
 
     for (let i = 0; i <= horizonDays; i++) {
       const date = addDays(startDate, i);
+      const dateKey = format(date, "yyyy-MM-dd");
+      if (blockedSpecific.has(dateKey)) {
+        continue;
+      }
+
       const isoDay = getISODay(date);
-      const hasAvailability = availabilitySummary.some(
-        (slot) => slot.isAvailable && slot.dayOfWeek === isoDay
+      const hasRecurring = recurringSlots.some(
+        (slot) => slot.dayOfWeek === isoDay
       );
 
-      if (hasAvailability) {
-        set.add(format(date, "yyyy-MM-dd"));
+      if (hasRecurring) {
+        set.add(dateKey);
       }
     }
 
@@ -239,51 +263,46 @@ export default function AppointmentBookingModal({ doctor, open, onOpenChange }: 
   
   const timeSlots = useMemo(() => {
     if (!selectedDate) return [];
+    if (!doctorAvailability.length) return [];
 
-    const dayIndexToMatch = getISODay(selectedDate);
-    
     console.log("🔍 [FILTER TIME SLOTS]");
-    console.log("   Looking for ISO day:", dayIndexToMatch);
     console.log("   Available slots:", doctorAvailability.length);
-    
-    const availableSlots = doctorAvailability.filter(
-      slot => slot.dayOfWeek === dayIndexToMatch && slot.isAvailable
-    );
 
-    console.log("   Matching slots:", availableSlots.length);
+    const activeSlots = doctorAvailability.filter((slot) => slot.isAvailable);
 
-    if (availableSlots.length === 0) {
+    if (activeSlots.length === 0) {
       console.warn("   ⚠️ No available slots for this day");
       return [];
-    } 
-    
+    }
+
     const generatedSlots: string[] = [];
 
-    for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 30) {
-        const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        
-        const isInAvailableSlot = availableSlots.some(slot => {
-          return timeStr >= slot.startTime && timeStr < slot.endTime;
-        });
-        
-        if (isInAvailableSlot) {
-          generatedSlots.push(timeStr);
-        }
+    const addSlotsFromRange = (start: string, end: string) => {
+      const [startHour, startMinute] = start.split(":").map(Number);
+      const [endHour, endMinute] = end.split(":").map(Number);
+
+      const startTotal = startHour * 60 + startMinute;
+      const endTotal = endHour * 60 + endMinute;
+
+      for (let minutes = startTotal; minutes < endTotal; minutes += 30) {
+        const hour = Math.floor(minutes / 60);
+        const minute = minutes % 60;
+        generatedSlots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
       }
-    }
-    
-    console.log("   Generated slots:", generatedSlots.length, generatedSlots.slice(0, 5));
-    
+    };
+
+    activeSlots.forEach((slot) => addSlotsFromRange(slot.startTime, slot.endTime));
+
+    const deduped = Array.from(new Set(generatedSlots)).sort();
+
     if (isSameDay(selectedDate, new Date())) {
-      const currentTime = format(new Date(), 'HH:mm');
-      const filtered = generatedSlots.filter(time => time > currentTime);
+      const currentTime = format(new Date(), "HH:mm");
+      const filtered = deduped.filter((time) => time > currentTime);
       console.log("   Filtered past times (current:", currentTime + "), kept:", filtered.length);
       return filtered;
     }
 
-    return generatedSlots;
-
+    return deduped;
   }, [selectedDate, doctorAvailability]);
   
   useEffect(() => {

@@ -155,6 +155,7 @@ export interface IDoctorAvailability extends Document {
   startTime: string;
   endTime: string;
   isAvailable: boolean;
+  specificDate?: string;
 }
 
 const doctorAvailabilitySchema = new Schema<IDoctorAvailability>({
@@ -162,7 +163,8 @@ const doctorAvailabilitySchema = new Schema<IDoctorAvailability>({
   dayOfWeek: { type: Number, required: true, min: 0, max: 6 },
   startTime: { type: String, required: true },
   endTime: { type: String, required: true },
-  isAvailable: { type: Boolean, default: true }
+  isAvailable: { type: Boolean, default: true },
+  specificDate: { type: String }
 });
 
 // ==========================================
@@ -458,11 +460,18 @@ export const insertPatientRecordSchema = z.object({
 
 export const insertDoctorAvailabilitySchema = z.object({
   doctorId: z.string(),
-  dayOfWeek: z.number().min(0).max(6),
+  dayOfWeek: z.number().min(0).max(6).optional(),
   startTime: z.string().min(1),
   endTime: z.string().min(1),
   isAvailable: z.boolean().default(true),
-});
+  specificDate: z.string().optional(),
+}).refine(
+  (data) => data.dayOfWeek !== undefined || data.specificDate,
+  {
+    message: "Either dayOfWeek or specificDate is required",
+    path: ["dayOfWeek"],
+  }
+);
 
 export const insertPaymentSchema = z.object({
   appointmentId: z.string(),
