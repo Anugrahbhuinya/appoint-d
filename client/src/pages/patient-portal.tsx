@@ -144,7 +144,6 @@ export default function PatientPortal() {
 
     // Handle booking appointment
     const handleBookAppointment = (doctor: Doctor) => {
-        // ... (rest of existing logic)
         setSelectedDoctor(doctor);
         setIsBookingModalOpen(true);
     };
@@ -174,7 +173,6 @@ export default function PatientPortal() {
     // Cancel Appointment Mutation
     const cancelAppointmentMutation = useMutation({
         mutationFn: async (appointmentId: string) => {
-            // Assuming a PATCH is used to update the status to 'cancelled'
             const res = await apiRequest("PATCH", `/api/appointments/${appointmentId}`, { status: "cancelled" });
             return res.json();
         },
@@ -194,18 +192,49 @@ export default function PatientPortal() {
         },
     });
 
-    // Action Handlers for AppointmentCard
+    // FIX: Proper handler functions with appointmentId parameter
     const handleViewDetails = (appointmentId: string) => {
-        // Implement logic to show a modal or navigate to a details page
-        toast({ title: "View Details Clicked", description: `Viewing details for appointment ${appointmentId}` });
+        console.log('handleViewDetails called with:', appointmentId);
+        if (!appointmentId) {
+            toast({
+                title: "Error",
+                description: "Appointment ID is missing",
+                variant: "destructive",
+            });
+            return;
+        }
+        toast({ 
+            title: "View Details Clicked", 
+            description: `Viewing details for appointment ${appointmentId}` 
+        });
     };
 
     const handleReschedule = (appointmentId: string) => {
-        // Implement logic to open a rescheduling flow (e.g., date picker modal)
-        toast({ title: "Reschedule Clicked", description: `Initiating reschedule for appointment ${appointmentId}` });
+        console.log('handleReschedule called with:', appointmentId);
+        if (!appointmentId) {
+            toast({
+                title: "Error",
+                description: "Appointment ID is missing",
+                variant: "destructive",
+            });
+            return;
+        }
+        toast({ 
+            title: "Reschedule Clicked", 
+            description: `Initiating reschedule for appointment ${appointmentId}` 
+        });
     };
 
     const handleCancel = (appointmentId: string) => {
+        console.log('handleCancel called with:', appointmentId);
+        if (!appointmentId) {
+            toast({
+                title: "Error",
+                description: "Appointment ID is missing",
+                variant: "destructive",
+            });
+            return;
+        }
         if (window.confirm("Are you sure you want to cancel this appointment?")) {
             cancelAppointmentMutation.mutate(appointmentId);
         }
@@ -252,7 +281,7 @@ export default function PatientPortal() {
                         </div>
 
                         <nav className="space-y-2">
-                            {/* NEW: Notifications Tab */}
+                            {/* Notifications Tab */}
                             <Button
                                 variant={activeTab === "notifications" ? "default" : "ghost"}
                                 className="w-full justify-start relative"
@@ -340,7 +369,6 @@ export default function PatientPortal() {
 
                     {activeTab === "search" && (
                         <div data-testid="search-content">
-                            {/* ... (Search Filters and Doctor Results content) ... */}
                             <div className="mb-8">
                                 <h1 className="text-3xl font-bold mb-2">Find Doctors</h1>
                                 <p className="text-muted-foreground">Search and book appointments with verified doctors</p>
@@ -482,7 +510,6 @@ export default function PatientPortal() {
                                             </TabsTrigger>
                                         </TabsList>
 
-                                        {/* FIX implemented here: added explicit 'return' */}
                                         <TabsContent value="upcoming" className="space-y-4">
                                             {upcomingAppointments.length > 0 ? (
                                                 upcomingAppointments.map((appointment) => {
@@ -491,7 +518,6 @@ export default function PatientPortal() {
                                                         ? `${doctor.firstName} ${doctor.lastName}`
                                                         : "Consultation Doctor";
                                                     
-                                                    // This explicit return fixes the TS1109 error
                                                     return (
                                                         <AppointmentCard 
                                                             key={appointment.id} 
@@ -517,7 +543,6 @@ export default function PatientPortal() {
                                             )}
                                         </TabsContent>
 
-                                        {/* FIX implemented here: added explicit 'return' */}
                                         <TabsContent value="past" data-testid="tab-past-content" className="space-y-4">
                                             {pastAppointments.length > 0 ? (
                                                 pastAppointments.map((appointment) => {
@@ -526,7 +551,6 @@ export default function PatientPortal() {
                                                         ? `${doctor.firstName} ${doctor.lastName}`
                                                         : "Consultation Doctor";
                                                         
-                                                    // This explicit return fixes the TS1109 error
                                                     return (
                                                         <AppointmentCard 
                                                             key={appointment.id} 

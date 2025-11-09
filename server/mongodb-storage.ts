@@ -3,24 +3,25 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
+import { format } from "date-fns";
 import { Notification } from "../shared/mongodb-schema";
 import {
-  User,
-  DoctorProfile,
-  Appointment,
-  DoctorDocument,
-  PatientRecord,
-  DoctorAvailability,
-  Payment,
-  Dispute,
-  type InsertUser,
-  type InsertDoctorProfile,
-  type InsertAppointment,
-  type InsertDoctorDocument,
-  type InsertPatientRecord,
-  type InsertDoctorAvailability,
-  type InsertPayment,
-  type InsertDispute,
+  User,
+  DoctorProfile,
+  Appointment,
+  DoctorDocument,
+  PatientRecord,
+  DoctorAvailability,
+  Payment,
+  Dispute,
+  type InsertUser,
+  type InsertDoctorProfile,
+  type InsertAppointment,
+  type InsertDoctorDocument,
+  type InsertPatientRecord,
+  type InsertDoctorAvailability,
+  type InsertPayment,
+  type InsertDispute,
 } from "@shared/mongodb-schema"; // Assuming this file defines your Mongoose Models
 
 dotenv.config();
@@ -36,6 +37,14 @@ const convertIsoToJsDay = (isoDay: number): number => {
 
 const convertJsDayToIso = (jsDay: number): number => {
   return jsDay === 0 ? 7 : jsDay;
+};
+
+const normalizeDateKey = (value: string): string => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid specificDate provided");
+  }
+  return format(date, "yyyy-MM-dd");
 };
 
 // ===========================
@@ -262,10 +271,115 @@ async getDoctorsWithProfiles(): Promise<(User & { profile: DoctorProfile })[]> {
   async updatePatientRecord(id: string, updates: Partial<PatientRecord>) { const record = await PatientRecord.findByIdAndUpdate(id, updates, { new: true }); if (!record) throw new Error("Patient record not found"); return record; }
 
   // === DOCTOR AVAILABILITY METHODS (omitted for brevity) ===
-  async createDoctorAvailability(data: InsertDoctorAvailability) { console.log("📝 [createDoctorAvailability]"); console.log("   Input dayOfWeek (ISO):", data.dayOfWeek); const convertedData = { ...data, dayOfWeek: convertIsoToJsDay(data.dayOfWeek) }; console.log("   Converted dayOfWeek (JS):", convertedData.dayOfWeek); const newAvailability = new DoctorAvailability(convertedData); const saved = await newAvailability.save(); console.log("   ✅ Saved with JS day:", saved.dayOfWeek); return saved; }
- async getDoctorAvailability(doctorId: string, dayOfWeek: number) { console.log("🔍 [getDoctorAvailability]"); console.log("   doctorId:", doctorId); console.log("   dayOfWeek (ISO):", dayOfWeek); const jsDay = convertIsoToJsDay(dayOfWeek); console.log("   Converted to JS day:", jsDay); const result = await DoctorAvailability.find({ doctorId: doctorId, dayOfWeek: jsDay }).sort({ startTime: 1 }).lean(); console.log("   Found", result.length, "slots"); if (result.length === 0) { console.warn("   ⚠️ No availability slots found for doctor on this day"); } const converted = result.map((slot: any) => ({ ...slot, dayOfWeek: convertJsDayToIso(slot.dayOfWeek) })); console.log("   Converted back to ISO, returning", converted.length, "slots"); return converted; }
-  async getAllDoctorAvailability(doctorId: string) { console.log("🔍 [getAllDoctorAvailability]"); console.log("   doctorId:", doctorId); const result = await DoctorAvailability.find({ doctorId }).sort({ dayOfWeek: 1, startTime: 1 }).lean(); console.log("   Found", result.length, "total slots"); const converted = result.map((slot: any) => ({ ...slot, dayOfWeek: convertJsDayToIso(slot.dayOfWeek) })); console.log("   Converted to ISO format, returning", converted.length, "slots"); console.log("   Converted data:", converted); return converted; }
-  async updateDoctorAvailability(id: string, updates: Partial<DoctorAvailability>) { console.log("✏️ [updateDoctorAvailability]"); console.log("   id:", id); console.log("   updates:", updates); const convertedUpdates = { ...updates, ...(updates.dayOfWeek !== undefined && { dayOfWeek: convertIsoToJsDay(updates.dayOfWeek) }) }; console.log("   Converted updates:", convertedUpdates); const availability = await DoctorAvailability.findByIdAndUpdate(id, convertedUpdates, { new: true }); if (!availability) { console.error("❌ Availability not found"); throw new Error("Availability not found"); } console.log("   ✅ Updated successfully"); const obj = availability.toObject ? availability.toObject() : availability; return { ...obj, dayOfWeek: convertJsDayToIso(obj.dayOfWeek) }; }
+  async createDoctorAvailability(data: InsertDoctorAvailability) {
+    console.log("📝 [createDoctorAvailability]");
+    const prepared: any = { ...data };
+
+    if (prepared.specificDate) {
+      prepared.specificDate = normalizeDateKey(prepared.specificDate);
+    }
+
+    if (prepared.dayOfWeek === undefined) {
+      if (!prepared.specificDate) {
+        throw new Error("dayOfWeek or specificDate required");
+      }
+      const derived = new Date(prepared.specificDate).getDay();
+      prepared.dayOfWeek = derived;
+    }
+
+    const newAvailability = new DoctorAvailability(prepared);
+    const saved = await newAvailability.save();
+    const obj = saved.toObject ? saved.toObject() : saved;
+    return { ...obj, dayOfWeek: convertJsDayToIso(obj.dayOfWeek) };
+  }
+
+  async getDoctorAvailability(doctorId: string, dayOfWeek: number) {
+    console.log("🔍 [getDoctorAvailability]");
+    const jsDay = convertIsoToJsDay(dayOfWeek);
+    const result = await DoctorAvailability.find({
+      doctorId: doctorId,
+      dayOfWeek: jsDay,
+    })
+      .sort({ startTime: 1 })
+      .lean();
+
+    return result.map((slot: any) => ({
+      ...slot,
+      dayOfWeek: convertJsDayToIso(slot.dayOfWeek),
+    }));
+  }
+
+  async getDoctorAvailabilityByDate(doctorId: string, dateKey: string) {
+    console.log("🔍 [getDoctorAvailabilityByDate]", { doctorId, dateKey });
+    const normalized = normalizeDateKey(dateKey);
+    const targetDate = new Date(normalized);
+    const jsDay = targetDate.getDay();
+
+    const result = await DoctorAvailability.find({
+      doctorId,
+      $or: [
+        { specificDate: normalized },
+        {
+          $and: [
+            { dayOfWeek: jsDay },
+            {
+              $or: [
+                { specificDate: { $exists: false } },
+                { specificDate: null },
+                { specificDate: "" },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+      .sort({ startTime: 1 })
+      .lean();
+
+    const specific = result.filter((slot: any) => slot.specificDate === normalized);
+    const toReturn = specific.length > 0 ? specific : result.filter((slot: any) => !slot.specificDate);
+
+    return toReturn.map((slot: any) => ({
+      ...slot,
+      dayOfWeek: convertJsDayToIso(slot.dayOfWeek),
+    }));
+  }
+
+  async getAllDoctorAvailability(doctorId: string) {
+    console.log("🔍 [getAllDoctorAvailability]");
+    const result = await DoctorAvailability.find({ doctorId })
+      .sort({ specificDate: 1, dayOfWeek: 1, startTime: 1 })
+      .lean();
+
+    return result.map((slot: any) => ({
+      ...slot,
+      dayOfWeek: convertJsDayToIso(slot.dayOfWeek),
+    }));
+  }
+
+  async updateDoctorAvailability(id: string, updates: Partial<DoctorAvailability>) {
+    console.log("✏️ [updateDoctorAvailability]", { id, updates });
+    const convertedUpdates: any = { ...updates };
+
+    if (convertedUpdates.dayOfWeek !== undefined) {
+      convertedUpdates.dayOfWeek = convertIsoToJsDay(convertedUpdates.dayOfWeek);
+    }
+
+    if (convertedUpdates.specificDate) {
+      convertedUpdates.specificDate = normalizeDateKey(convertedUpdates.specificDate as any);
+      if (convertedUpdates.dayOfWeek === undefined) {
+        convertedUpdates.dayOfWeek = new Date(convertedUpdates.specificDate).getDay();
+      }
+    }
+
+    const availability = await DoctorAvailability.findByIdAndUpdate(id, convertedUpdates, { new: true });
+    if (!availability) {
+      throw new Error("Availability not found");
+    }
+
+    const obj = availability.toObject ? availability.toObject() : availability;
+    return { ...obj, dayOfWeek: convertJsDayToIso(obj.dayOfWeek) };
+  }
   async deleteDoctorAvailability(id: string): Promise<DoctorAvailability | null> { console.log("🗑️ [deleteDoctorAvailability]"); console.log("   id:", id); const result = await DoctorAvailability.findByIdAndDelete(id); if (result) { console.log("   ✅ Deleted successfully"); } else { console.log("   ⚠️ Not found"); } return result; }
 
   // === PAYMENT METHODS (omitted for brevity) ===

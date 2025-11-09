@@ -420,8 +420,8 @@ export const insertAppointmentSchema = z.object({
   doctorId: z.string().min(1, "Doctor ID is required"),
   // ✅ FIX: Use z.coerce.date() for string-to-Date conversion
   appointmentDate: z.coerce.date({ 
-    errorMap: (issue, ctx) => ({ message: "Invalid date format or value" })
-  }),
+    errorMap: (issue, ctx) => ({ message: "Invalid date format or value" })
+  }),
   duration: z.number().default(30),
   type: z.enum(['video', 'in-person']),
   // ✅ FIX: Added 'pending' to the Zod enum list
