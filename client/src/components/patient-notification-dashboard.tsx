@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Bell, Mail, CheckCircle2, AlertCircle, Loader2, Trash2, User } from 'lucide-react';
+import { Bell, Mail, CheckCircle2, AlertCircle, Loader2, Trash2, User, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 // Interface definitions (as provided)
@@ -33,6 +33,7 @@ export function PatientNotificationDashboard() {
   const queryClient = useQueryClient();
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [doctorsMap, setDoctorsMap] = useState<Map<string, Doctor>>(new Map());
+  const [processingPayment, setProcessingPayment] = useState<string | null>(null);
 
   // 🔄 Fetch notifications (unchanged)
   const { data: notifications = [], isLoading, error } = useQuery({
@@ -123,6 +124,139 @@ export function PatientNotificationDashboard() {
         description: 'Failed to delete notification',
         variant: 'destructive',
       });
+    }
+  };
+
+  // 💳 NEW: Handle payment via Razorpay
+  const handlePayment = async (notification: Notification) => {
+    if (!notification.appointmentId || !notification.consultationFee) {
+      toast({
+        title: '❌ Error',
+        description: 'Missing appointment or fee information',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setProcessingPayment(notification._id);
+    try {
+      // Step 1: Create Razorpay order from your backend
+      console.log('🛒 Creating order with:', {
+        amount: notification.consultationFee,
+        appointmentId: notification.appointmentId,
+        doctorId: notification.doctorId,
+      });
+
+      const orderRes = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: notification.consultationFee,
+          appointmentId: notification.appointmentId,
+          doctorId: notification.doctorId,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errorData = await orderRes.json();
+        console.error('❌ Order creation failed:', errorData);
+        throw new Error(errorData.message || 'Failed to create order');
+      }
+
+      const orderData = await orderRes.json();
+      console.log('✅ Order created:', orderData);
+      const { orderId, amount, currency, key } = orderData;
+
+      // Step 2: Open Razorpay checkout
+      const options = {
+        key: key, // Razorpay Key ID from your backend
+        amount: amount, // Amount in paise
+        currency: currency,
+        name: 'Healthcare Portal',
+        description: `Consultation Fee - Appointment ${notification.appointmentId}`,
+        order_id: orderId,
+        handler: async (response: any) => {
+          // Step 3: Verify payment on backend
+          try {
+            const verifyRes = await fetch('/api/payments/confirm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            if (!verifyRes.ok) {
+              throw new Error('Payment verification failed');
+            }
+
+            const verifyData = await verifyRes.json();
+
+            toast({
+              title: '✅ Payment Successful!',
+              description: 'Your appointment is now confirmed.',
+            });
+
+            // Refresh notifications to show updated status
+            queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+            setSelectedNotification(null);
+          } catch (err) {
+            console.error('Payment verification error:', err);
+            toast({
+              title: '❌ Verification Failed',
+              description: 'Payment was successful but verification failed. Please contact support.',
+              variant: 'destructive',
+            });
+          } finally {
+            setProcessingPayment(null);
+          }
+        },
+        prefill: {
+          name: 'Patient',
+          email: 'patient@example.com',
+          contact: '9000090000',
+        },
+        theme: {
+          color: '#3399cc',
+        },
+        modal: {
+          ondismiss: () => {
+            toast({
+              title: '❌ Payment Cancelled',
+              description: 'You cancelled the payment. Please try again.',
+              variant: 'destructive',
+            });
+            setProcessingPayment(null);
+          },
+        },
+      };
+
+      // Load Razorpay script if not already loaded
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => {
+        const razorpay = new (window as any).Razorpay(options);
+        razorpay.open();
+      };
+      script.onerror = () => {
+        toast({
+          title: '❌ Error',
+          description: 'Failed to load payment gateway',
+          variant: 'destructive',
+        });
+        setProcessingPayment(null);
+      };
+      document.head.appendChild(script);
+    } catch (err) {
+      console.error('Payment error:', err);
+      toast({
+        title: '❌ Payment Error',
+        description: err instanceof Error ? err.message : 'Failed to initiate payment. Please try again.',
+        variant: 'destructive',
+      });
+      setProcessingPayment(null);
     }
   };
 
@@ -277,6 +411,8 @@ export function PatientNotificationDashboard() {
             const style = getNotificationStyle(notification.type, notification.read);
             const isSelected = selectedNotification?._id === notification._id;
             const doctorName = getDoctorName(notification.doctorId);
+            const isPaymentPending = notification.type === 'payment_pending';
+            const isProcessing = processingPayment === notification._id;
 
             return (
               <Card
@@ -373,8 +509,31 @@ export function PatientNotificationDashboard() {
                             </p>
                           </div>
 
-                          {/* Actions (unchanged, style is good) */}
-                          <div className="flex gap-2 pt-2">
+                          {/* Actions */}
+                          <div className="flex gap-2 pt-2 flex-wrap">
+                            {isPaymentPending && (
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePayment(notification);
+                                }}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                    Processing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard className="w-4 h-4 mr-1" />
+                                    Pay Now
+                                  </>
+                                )}
+                              </Button>
+                            )}
                             {!notification.read && (
                               <Button
                                 size="sm"

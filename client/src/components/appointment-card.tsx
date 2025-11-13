@@ -23,9 +23,23 @@ interface AppointmentCardProps {
     createdAt: string;
   };
   userRole: "patient" | "doctor" | "admin";
+  doctorName: string;
+  onViewDetails: (appointmentId: string) => void;
+  onReschedule: (appointmentId: string) => void;
+  onCancel: (appointmentId: string) => void;
 }
 
-export default function AppointmentCard({ appointment, userRole }: AppointmentCardProps) {
+export default function AppointmentCard({ 
+  appointment, 
+  userRole, 
+  doctorName,
+  onViewDetails, 
+  onReschedule, 
+  onCancel 
+}: AppointmentCardProps) {
+  // FIX: Handle both 'id' and '_id' fields from MongoDB
+  const appointmentId = appointment.id || (appointment as any)._id;
+  
   const appointmentDate = new Date(appointment.appointmentDate);
   const isUpcoming = appointmentDate > new Date();
   
@@ -61,6 +75,22 @@ export default function AppointmentCard({ appointment, userRole }: AppointmentCa
     });
   };
 
+  // FIX: Wrap handler calls to ensure they execute properly
+  const handleViewDetails = () => {
+    console.log('View Details - appointmentId:', appointmentId);
+    onViewDetails(appointmentId);
+  };
+
+  const handleReschedule = () => {
+    console.log('Reschedule - appointmentId:', appointmentId);
+    onReschedule(appointmentId);
+  };
+
+  const handleCancel = () => {
+    console.log('Cancel - appointmentId:', appointmentId);
+    onCancel(appointmentId);
+  };
+
   return (
     <Card data-testid={`appointment-card-${appointment.id}`}>
       <CardContent className="p-6">
@@ -74,7 +104,7 @@ export default function AppointmentCard({ appointment, userRole }: AppointmentCa
             
             <div>
               <h3 className="font-semibold" data-testid={`appointment-title-${appointment.id}`}>
-                {userRole === "doctor" ? "Patient Consultation" : "Dr. Consultation"}
+                {userRole === "doctor" ? "Patient Consultation" : `Dr. ${doctorName}`}
               </h3>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
                 <div className="flex items-center space-x-1">
@@ -135,17 +165,27 @@ export default function AppointmentCard({ appointment, userRole }: AppointmentCa
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem data-testid={`menu-view-details-${appointment.id}`}>
+                {/* FIX: Use onSelect instead of onClick for better compatibility */}
+                <DropdownMenuItem 
+                  data-testid={`menu-view-details-${appointment.id}`}
+                  onSelect={handleViewDetails}
+                >
                   View Details
                 </DropdownMenuItem>
+                
                 {appointment.status === "scheduled" && (
                   <>
-                    <DropdownMenuItem data-testid={`menu-reschedule-${appointment.id}`}>
+                    <DropdownMenuItem 
+                      data-testid={`menu-reschedule-${appointment.id}`}
+                      onSelect={handleReschedule}
+                    >
                       Reschedule
                     </DropdownMenuItem>
+                    
                     <DropdownMenuItem 
                       className="text-destructive"
                       data-testid={`menu-cancel-${appointment.id}`}
+                      onSelect={handleCancel}
                     >
                       Cancel
                     </DropdownMenuItem>
