@@ -93,21 +93,11 @@
       transform: translateX(0);
     }
     100% {
-      /* Moves the 200% wide SVG 50% to the left, which is one full cycle */
       transform: translateX(-50%);
     }
   }
-  @layer components {
-  .heartbeat-container {
-    /* This ensures the animation doesn't cause a horizontal scrollbar */
-    width: 100%;
-    overflow-x: hidden;
-  }
-  .heartbeat-svg {
-    /* Applies the infinite animation */
-    animation: scroll-left 8s linear infinite;
-  }
-}
+
+  /* Global Base Styles */
   * {
     @apply border-border;
   }
@@ -122,6 +112,26 @@
 }
 
 @layer components {
+  /* Heartbeat Animation Classes */
+  .heartbeat-container {
+    width: 100%;
+    overflow-x: hidden;
+  }
+  .heartbeat-svg {
+    animation: scroll-left 8s linear infinite;
+  }
+
+  /* --- ADDED: Hide Scrollbar Class --- */
+  .hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+  /* ----------------------------------- */
+
+  /* Transitions & Animations */
   .nav-transition {
     transition: all 0.3s ease-in-out;
   }
@@ -135,6 +145,7 @@
     transition: transform 0.2s ease-in-out;
   }
 
+  /* Effects */
   .medical-gradient {
     background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
   }
