@@ -30,22 +30,26 @@ const RECORD_TYPES = [
 
 export default function HealthRecordsManager() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [recordType, setRecordType] = useState<'lab_report' | 'prescription' | 'x_ray' | 'other'>('lab_report');
+  const [recordType, setRecordType] = useState<string>('lab_report');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: records = [], isLoading } = useQuery<HealthRecord[]>({
+  const { data: records = [], isLoading, refetch, error } = useQuery<HealthRecord[]>({
     queryKey: ["/api/patient/records"],
   });
+
+  // Debug: Log records and errors
+  console.log("Records:", records);
+  console.log("Query Error:", error);
 
   const uploadRecordMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const res = await apiRequest("POST", "/api/patient/records", formData);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/patient/records"] });
+    onSuccess: (data) => {
+      console.log("Upload successful:", data);
       toast({
         title: "Record Uploaded",
         description: "Your health record has been uploaded successfully.",
@@ -55,6 +59,9 @@ export default function HealthRecordsManager() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      // Invalidate and refetch records after successful upload
+      queryClient.invalidateQueries({ queryKey: ["/api/patient/records"] });
+      refetch();
     },
     onError: (error: Error) => {
       toast({
@@ -65,10 +72,30 @@ export default function HealthRecordsManager() {
     },
   });
 
+  const deleteRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      const res = await apiRequest("DELETE", `/api/patient/records/${recordId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Record Deleted",
+        description: "Health record has been deleted successfully.",
+      });
+      refetch();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Check file size (10MB limit)
       if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "File Too Large",
@@ -78,7 +105,6 @@ export default function HealthRecordsManager() {
         return;
       }
 
-      // Check file type
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       if (!allowedTypes.includes(file.type)) {
         toast({
@@ -105,9 +131,28 @@ export default function HealthRecordsManager() {
 
     const formData = new FormData();
     formData.append('record', selectedFile);
-    formData.append('recordType', recordType);
+    formData.append('recordType', recordType as 'lab_report' | 'prescription' | 'x_ray' | 'other');
 
     uploadRecordMutation.mutate(formData);
+  };
+
+  const handleDownload = (record: HealthRecord) => {
+    const link = document.createElement('a');
+    link.href = record.filePath;
+    link.download = record.fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleView = (record: HealthRecord) => {
+    window.open(record.filePath, '_blank');
+  };
+
+  const handleDelete = (recordId: string) => {
+    if (confirm('Are you sure you want to delete this record?')) {
+      deleteRecordMutation.mutate(recordId);
+    }
   };
 
   const getRecordTypeLabel = (type: string) => {
@@ -156,7 +201,6 @@ export default function HealthRecordsManager() {
 
   return (
     <div className="space-y-6">
-      {/* Upload Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -221,7 +265,6 @@ export default function HealthRecordsManager() {
         </CardContent>
       </Card>
 
-      {/* Records List */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -256,15 +299,28 @@ export default function HealthRecordsManager() {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleView(record)}
+                    >
                       <Eye className="w-4 h-4 mr-2" />
                       View
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDownload(record)}
+                    >
                       <Download className="w-4 h-4 mr-2" />
                       Download
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDelete(record._id)}
+                      disabled={deleteRecordMutation.isPending}
+                    >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>

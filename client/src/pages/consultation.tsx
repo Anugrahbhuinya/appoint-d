@@ -1,59 +1,47 @@
-// FILE: src/pages/video-consultation.tsx
+// FILE: src/pages/consultation.tsx
+// This page handles the /consultation/:appointmentId?roomName=X route
 
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { VideoConsultation } from "@/components/video-consultation";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
-interface VideoConsultationPageProps {
-  params?: {
-    appointmentId?: string;
-  };
-}
-
-export default function VideoConsultationPage({ 
-  params 
-}: VideoConsultationPageProps) {
+export default function ConsultationPage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   
-  const [appointmentId, setAppointmentId] = useState<string | null>(null);
+  // ✅ STEP 1: Extract appointmentId from route params
+  const [match, params] = useRoute("/consultation/:appointmentId");
+  const appointmentId = match ? params?.appointmentId : null;
+
+  // ✅ STEP 2: Extract roomName from query string
   const [roomName, setRoomName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [, location] = useLocation();
 
   useEffect(() => {
-    console.log("🎬 VideoConsultationPage mounted");
-    console.log("   params.appointmentId:", params?.appointmentId);
-    console.log("   window.location.href:", window.location.href);
+    console.log("🔍 Consultation Page Mounted");
+    console.log("   URL:", location);
+    console.log("   Appointment ID from route:", appointmentId);
 
-    // ✅ STEP 1: Get appointmentId from params
-    const id = params?.appointmentId;
-    if (!id) {
-      console.error("❌ No appointment ID in params");
+    if (!appointmentId) {
+      console.error("❌ No appointment ID in route");
       setError("Missing appointment ID");
       setIsLoading(false);
       return;
     }
 
-    setAppointmentId(id);
-    console.log("✅ Appointment ID extracted:", id);
-
-    // ✅ STEP 2: Extract roomName from URL query string
-    let room: string | null = null;
+    // ✅ Extract roomName from query string using URLSearchParams
     try {
       const url = new URL(window.location.href);
-      room = url.searchParams.get("roomName");
+      const room = url.searchParams.get("roomName");
 
-      console.log("🔍 Extracting roomName from URL");
-      console.log("   Full URL:", url.href);
-      console.log("   Query Params:", url.search);
-      console.log("   roomName from query:", room);
+      console.log("   Room name from query:", room);
 
       if (!room) {
-        console.error("❌ No roomName in query string");
-        console.error("   Expected format: /consultation/ID?roomName=VALUE");
+        console.error("❌ No room name in query string");
         setError("Missing room name - video session not initialized.");
         setIsLoading(false);
         return;
@@ -61,25 +49,22 @@ export default function VideoConsultationPage({
 
       setRoomName(room);
       setError(null);
-      console.log("✅ Room name extracted:", room);
+      setIsLoading(false);
 
+      console.log("✅ Consultation page ready");
+      console.log("   appointmentId:", appointmentId);
+      console.log("   roomName:", room);
     } catch (err) {
       console.error("❌ Error parsing URL:", err);
       setError("Failed to parse consultation parameters");
       setIsLoading(false);
-      return;
     }
-
-    setIsLoading(false);
-    console.log("✅ Consultation page ready with:");
-    console.log("   appointmentId:", id);
-    console.log("   roomName:", room);
-
-  }, [params?.appointmentId]);
+  }, [appointmentId, location]);
 
   // ✅ Handler for when call ends
   const handleCallEnd = (metrics: any) => {
     console.log("✅ Call ended with metrics:", metrics);
+    // You can add additional logic here if needed
   };
 
   // ✅ Handler for when user exits the call
@@ -98,15 +83,10 @@ export default function VideoConsultationPage({
   if (error) {
     return (
       <div className="fixed inset-0 z-50 bg-background flex items-center justify-center">
-        <div className="text-center max-w-md space-y-6 p-6">
+        <div className="text-center max-w-md space-y-6">
           <div>
             <h1 className="text-3xl font-bold text-destructive mb-2">Error</h1>
-            <p className="text-muted-foreground text-lg">{error}</p>
-            <div className="mt-4 p-4 bg-muted rounded-lg text-left text-sm font-mono">
-              <p className="text-xs text-muted-foreground mb-2">Debug Info:</p>
-              <p>Params: {JSON.stringify(params)}</p>
-              <p>URL: {window.location.href}</p>
-            </div>
+            <p className="text-muted-foreground">{error}</p>
           </div>
           <Button onClick={handleCallExit} variant="outline">
             Go Back
@@ -123,10 +103,6 @@ export default function VideoConsultationPage({
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto" />
           <p className="text-white font-medium">Connecting to secure server...</p>
-          <p className="text-xs text-gray-400">
-            Appointment: {appointmentId || "loading..."}<br />
-            Room: {roomName || "loading..."}
-          </p>
         </div>
       </div>
     );

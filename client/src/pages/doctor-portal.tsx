@@ -46,6 +46,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertDoctorProfileSchema } from "@shared/mongodb-schema";
 import { z } from "zod";
+import { useLocation } from "wouter"; 
+
+// ✅ STEP 2: Use the centralized Appointment type
+import { Appointment } from "@/types/appointment"; 
 
 interface DoctorProfile {
     id: string;
@@ -72,22 +76,6 @@ interface DoctorProfile {
     };
 }
 
-// Includes all possible statuses for type safety across components
-interface Appointment {
-    _id: string;
-    id: string;
-    patientId: string;
-    doctorId: string;
-    patientName?: string;
-    appointmentDate: string;
-    duration: number;
-    type: "video" | "in-person";
-    status: "scheduled" | "completed" | "cancelled" | "no-show" | "awaiting_payment" | "confirmed" | "pending"; 
-    consultationFee: number;
-    notes?: string;
-    prescription?: string;
-    createdAt: string;
-}
 
 const DoctorProfileFormSchema = insertDoctorProfileSchema.omit({ userId: true }).extend({
     profilePicture: z.string().optional(),
@@ -121,6 +109,7 @@ interface AddressSuggestion {
 
 export default function DoctorPortal() {
     const { user, logoutMutation } = useAuth();
+    const [, setLocation] = useLocation(); 
     const [activeTab, setActiveTab] = useState("dashboard");
     const [profilePicPreview, setProfilePicPreview] = useState<string | null>(
         null
@@ -165,12 +154,12 @@ export default function DoctorPortal() {
         refetchIntervalInBackground: true,
     });
 
-    const appointmentsRequiringAction = notifications.filter((a: any) => 
+    const appointmentsRequiringAction = notifications.filter((a: any) =>
         a.status === "pending" || a.status === "awaiting_payment"
     ).length;
     
     // Using the count of appointments that need doctor attention for the badge
-    const unreadCount = appointmentsRequiringAction; 
+    const unreadCount = appointmentsRequiringAction;
     // ------------------------------------------------------------------
 
     const {
@@ -184,6 +173,7 @@ export default function DoctorPortal() {
         refetchInterval: 30000,
     });
 
+    // ✅ USE SHARED TYPE: useQuery uses the imported Appointment[] type
     const { data: allAppointments = [], refetch: refetchAppointments } = useQuery<
         Appointment[]
     >({
@@ -194,7 +184,7 @@ export default function DoctorPortal() {
 
     const userIdStr = typeof user?.id === 'string' ? user.id : user?._id?.toString?.() || '';
 
-    // Simplified filter to only match the logged-in doctor's ID
+    // ✅ REMOVE CASTING: Filter appointments without casting
     const appointments = allAppointments.filter((apt) => {
         return apt.doctorId === userIdStr;
     });
@@ -220,7 +210,7 @@ export default function DoctorPortal() {
             const aptDate = new Date(apt.appointmentDate);
 
             // Filter: Must be in the future AND have a finalized status
-            const isFinalized = apt.status === "scheduled" || apt.status === "confirmed"; 
+            const isFinalized = apt.status === "scheduled" || apt.status === "confirmed";
             
             return aptDate > now && isFinalized;
         })
@@ -265,6 +255,12 @@ export default function DoctorPortal() {
         if (profile?.clinicAddress?.fullAddress && !addressSearch) {
             setAddressSearch(profile.clinicAddress.fullAddress);
         }
+        
+        // --- ADDED: Clear local preview state when profile loads from server ---
+        if (profile) {
+             setProfilePicPreview(null); 
+        }
+        // --- END ADDITION ---
     }, [profile, addressSearch]);
 
     useEffect(() => {
@@ -481,7 +477,64 @@ export default function DoctorPortal() {
             createProfileMutation.mutate(dataWithPicture);
         }
     };
+    
+    // doctor-portal.tsx (Updated handleDoctorJoinCall)
 
+// ✅ USE SHARED TYPE: handleDoctorJoinCall uses the imported Appointment type
+// File: src/pages/doctor-portal.tsx (UPDATED)
+
+// Replace the handleDoctorJoinCall function with this:
+
+// ✅ handleDoctorJoinCall updated for Navigation Flow
+const handleDoctorJoinCall = (appointment: Appointment) => {
+    const appointmentId = appointment._id || appointment.id;
+    const roomName = appointment.roomName;
+    
+    console.log("📞 Doctor attempting to join call");
+    console.log("   Appointment ID:", appointmentId);
+    console.log("   Room Name:", roomName);
+    console.log("   Video Session ID:", appointment.videoSessionId);
+
+    // ✅ STEP 1: Validate appointment type
+    if (appointment.type !== "video") {
+        console.warn("⚠️ This is not a video appointment");
+        toast({
+            title: "Invalid Appointment Type",
+            description: "Only video appointments support live calls",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    // ✅ STEP 2: Verify Appointment ID exists
+    if (!appointmentId) {
+        console.error("❌ ERROR: Appointment ID is missing");
+        toast({
+            title: "Error",
+            description: "Appointment ID is missing",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    // ✅ STEP 3: Check for roomName (should exist after create-video-session call)
+    if (!roomName) {
+        console.error("❌ ERROR: Room name is missing from appointment data.");
+        toast({
+            title: "Video Call Not Ready",
+            description: "The video session has not been provisioned yet. Please try again.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    console.log(`✅ All checks passed, navigating to consultation`);
+    
+    // ✅ STEP 4: Navigate using wouter with roomName in query params
+    const consultationUrl = `/consultation/${appointmentId}?roomName=${encodeURIComponent(roomName)}`;
+    console.log("📍 Navigating to:", consultationUrl);
+    setLocation(consultationUrl);
+};
 
     const totalPatients = new Set(appointments.map((apt) => apt.patientId)).size;
     const completedAppointments = appointments.filter(
@@ -522,11 +575,13 @@ export default function DoctorPortal() {
                         <div className="mb-8">
                             <div className="flex items-center space-x-3 mb-2">
                                 <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                                    {/* FIX APPLIED: Added crossOrigin for CORS resolution */}
                                     {profile?.profilePicture ? (
                                         <img
                                             src={profile.profilePicture}
                                             alt="Profile"
                                             className="w-full h-full object-cover"
+                                            crossOrigin="anonymous" 
                                             onError={() => {
                                                 console.warn(
                                                     "Failed to load profile picture from database"
@@ -776,9 +831,11 @@ export default function DoctorPortal() {
                                             {upcomingAppointments.map((appointment) => (
                                                 <AppointmentStatusManager
                                                     key={appointment._id}
-                                                    appointment={appointment}
+                                                    // ✅ REMOVED CASTING: The imported Appointment type should now be compatible
+                                                    appointment={appointment} 
                                                     userRole="doctor"
                                                     onStatusChange={() => refetchAppointments()}
+                                                    onJoinCall={handleDoctorJoinCall} 
                                                 />
                                             ))}
                                         </div>
@@ -811,14 +868,17 @@ export default function DoctorPortal() {
                                     <CardContent className="space-y-6">
                                         <div className="flex items-center space-x-6">
                                             <div className="w-32 h-32 bg-primary/10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                {/* FIX APPLIED: Added crossOrigin and robust onError handler */}
                                                 {displayPictureUrl ? (
                                                     <img
                                                         src={displayPictureUrl}
                                                         alt="Profile preview"
                                                         className="w-full h-full object-cover"
+                                                        crossOrigin="anonymous" 
                                                         onError={(e) => {
-                                                            console.error("Failed to load preview image");
-                                                            e.currentTarget.style.display = "none";
+                                                            e.currentTarget.src = ""; // Stop retrying the bad URL
+                                                            setProfilePicPreview(null); // Clear the bad local state
+                                                            console.error("Failed to load preview image (Clearing state)", e);
                                                         }}
                                                     />
                                                 ) : (
@@ -1139,9 +1199,10 @@ export default function DoctorPortal() {
                                             .map((appointment) => (
                                                 <AppointmentStatusManager
                                                     key={appointment._id}
-                                                    appointment={appointment}
+                                                    appointment={appointment} 
                                                     userRole="doctor"
                                                     onStatusChange={() => refetchAppointments()}
+                                                    onJoinCall={handleDoctorJoinCall}
                                                 />
                                             ))
                                     ) : (
@@ -1164,9 +1225,10 @@ export default function DoctorPortal() {
                                             .map((appointment) => (
                                                 <AppointmentStatusManager
                                                     key={appointment._id}
-                                                    appointment={appointment}
+                                                    appointment={appointment} 
                                                     userRole="doctor"
                                                     onStatusChange={() => refetchAppointments()}
+                                                    onJoinCall={handleDoctorJoinCall}
                                                 />
                                             ))
                                     ) : (
@@ -1189,9 +1251,10 @@ export default function DoctorPortal() {
                                             .map((appointment) => (
                                                 <AppointmentStatusManager
                                                     key={appointment._id}
-                                                    appointment={appointment}
+                                                    appointment={appointment} 
                                                     userRole="doctor"
                                                     onStatusChange={() => refetchAppointments()}
+                                                    onJoinCall={handleDoctorJoinCall}
                                                 />
                                             ))
                                     ) : (
@@ -1214,9 +1277,10 @@ export default function DoctorPortal() {
                                             .map((appointment) => (
                                                 <AppointmentStatusManager
                                                     key={appointment._id}
-                                                    appointment={appointment}
+                                                    appointment={appointment} 
                                                     userRole="doctor"
                                                     onStatusChange={() => refetchAppointments()}
+                                                    onJoinCall={handleDoctorJoinCall}
                                                 />
                                             ))
                                     ) : (

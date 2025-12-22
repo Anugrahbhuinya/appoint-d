@@ -21,31 +21,17 @@ import {
     Edit,
     Bell,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isBefore, isAfter, subMinutes, addMinutes } from "date-fns";
 import { useState } from "react";
-
-interface Appointment {
-    _id: string;
-    id?: string;
-    patientId: string;
-    doctorId: string;
-    patientName?: string;
-    appointmentDate: string;
-    duration: number;
-    type: "video" | "in-person";
-    // Includes all possible states for correct typing
-    status: "scheduled" | "completed" | "cancelled" | "no-show" | "awaiting_payment" | "confirmed" | "pending"; 
-    consultationFee: number;
-    notes?: string;
-    prescription?: string;
-    prescriptionFile?: string;
-    createdAt: string;
-}
+import React from "react";
+import { Appointment } from "@/types/appointment";
 
 interface AppointmentStatusManagerProps {
-    appointment: Partial<Appointment>;
+    appointment: Appointment;
     userRole?: "doctor" | "patient" | "admin";
     onStatusChange?: () => void;
+    isScheduleDisabled?: boolean;
+    onJoinCall?: (appointment: Appointment) => void;
 }
 
 const ALL_STATUSES = ["scheduled", "completed", "cancelled", "no-show", "awaiting_payment", "confirmed", "pending"] as const;
@@ -96,14 +82,15 @@ const statusConfig: Record<StatusKey, any> = {
     },
 };
 
-export default function AppointmentStatusManager({
+function AppointmentStatusManager({
     appointment,
     userRole = "doctor",
     onStatusChange,
+    isScheduleDisabled = false,
+    onJoinCall,
 }: AppointmentStatusManagerProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-    // Initialize state using the appointment's status, ensuring a valid key type
     const initialStatus = (appointment.status || "scheduled") as StatusKey;
     const [selectedStatus, setSelectedStatus] = useState<StatusKey>(initialStatus);
 
@@ -111,8 +98,22 @@ export default function AppointmentStatusManager({
     const [prescription, setPrescription] = useState(appointment.prescription || "");
     const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
     const [prescriptionFileName, setPrescriptionFileName] = useState<string>("");
+    
     const { toast } = useToast();
     const queryClient = useQueryClient();
+
+    // ✅ DEBUG: Log the appointment when component mounts
+    React.useEffect(() => {
+        console.log("🔍 AppointmentStatusManager received appointment:", {
+            _id: appointment._id,
+            id: appointment.id,
+            _id_length: appointment._id?.length,
+            _id_type: typeof appointment._id,
+            status: appointment.status,
+            type: appointment.type,
+            roomName: appointment.roomName,
+        });
+    }, [appointment._id, appointment.id]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -128,16 +129,17 @@ export default function AppointmentStatusManager({
             if (!allowedTypes.includes(file.type)) {
                 toast({
                     title: "Invalid file type",
-                    description: "Please upload PDF, DOC, DOCX, PNG, or JPG files only",
+                    description: `Please upload PDF, DOC, DOCX, PNG, or JPG files. You uploaded: ${file.type}`,
                     variant: "destructive",
                 });
                 return;
             }
 
             if (file.size > 5 * 1024 * 1024) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
                 toast({
                     title: "File too large",
-                    description: "Please select a file under 5MB",
+                    description: `File is ${sizeMB}MB. Maximum allowed is 5MB`,
                     variant: "destructive",
                 });
                 return;
@@ -157,7 +159,6 @@ export default function AppointmentStatusManager({
         mutationFn: async (data: any) => {
             const id = appointment._id || appointment.id;
             if (!id) throw new Error("Appointment ID is missing");
-            // Call PUT API to update status, notes, and prescription/file
             const res = await apiRequest("PUT", `/api/appointments/${id}`, data);
             if (!res.ok) throw new Error("Failed to update appointment");
             return res.json();
@@ -168,7 +169,9 @@ export default function AppointmentStatusManager({
                 description: `Appointment status changed to ${selectedStatus}`,
             });
             
-            // CRUCIAL: Invalidate both the master appointment list and notifications list
+            setPrescriptionFile(null);
+            setPrescriptionFileName("");
+            
             queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
             queryClient.invalidateQueries({ queryKey: ["/api/doctor/notifications"] });
             
@@ -185,14 +188,36 @@ export default function AppointmentStatusManager({
     });
 
     const handleStatusUpdate = async () => {
+        if (selectedStatus === "completed" && !appointment.callStartedAt) {
+            toast({
+                title: "Cannot Complete",
+                description: "Call must be started before marking as completed",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (selectedStatus === "cancelled" && appointment.status !== "cancelled") {
+            const confirmed = window.confirm(
+                "Are you sure you want to cancel this appointment? This action cannot be undone."
+            );
+            if (!confirmed) return;
+        }
+
         const updateData: any = { status: selectedStatus, notes, prescription };
 
-        // Handle file upload if status is completed
         if (prescriptionFile && selectedStatus === "completed") {
             const reader = new FileReader();
             reader.onload = () => {
                 updateData.prescriptionFile = reader.result as string;
                 updateStatusMutation.mutate(updateData);
+            };
+            reader.onerror = () => {
+                toast({
+                    title: "Error",
+                    description: "Failed to read file",
+                    variant: "destructive",
+                });
             };
             reader.readAsDataURL(prescriptionFile);
         } else {
@@ -205,11 +230,88 @@ export default function AppointmentStatusManager({
         ? new Date(appointment.appointmentDate)
         : new Date();
 
-    // Determine if the action buttons (Schedule/Manage) should be visible
+    const now = new Date();
+    const startTime = subMinutes(appointmentDateTime, 15);
+    const endTime = addMinutes(appointmentDateTime, appointment.duration || 30);
+    
+    // ✅ FIX: Check for roomName from appointment object
+    const isReadyToJoin = appointment.type === "video" &&
+        (appointment.status === "scheduled" || appointment.status === "confirmed") &&
+        isAfter(now, startTime) &&
+        isBefore(now, endTime) &&
+        !!(appointment._id || appointment.id);
+
     const isActionable = (appointment.status === "scheduled" || appointment.status === "confirmed");
 
-    // Filter statuses available for update in the dialog (exclude notification states)
     const editableStatuses = (["scheduled", "completed", "cancelled", "no-show"] as StatusKey[]);
+
+    // ✅ UPDATED: Handle Join Call with roomName
+    const handleJoinCall = async () => {
+        console.log("📌 Join Call button clicked");
+        console.log("   appointment._id:", appointment._id);
+        console.log("   appointment.id:", appointment.id);
+        console.log("   appointment.roomName:", appointment.roomName);
+
+        try {
+            const appointmentId = appointment._id || appointment.id;
+            
+            if (!appointmentId) {
+                console.error("❌ Appointment ID is missing!");
+                toast({
+                    title: "Error",
+                    description: "Appointment ID is missing",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            // ✅ STEP 1: Create/get video session
+            console.log("🎥 Creating video session...");
+            const sessionResponse = await apiRequest(
+                "POST",
+                `/api/appointments/${appointmentId}/create-video-session`,
+                {}
+            );
+
+            if (!sessionResponse.ok) {
+                const error = await sessionResponse.json();
+                throw new Error(error.message || "Failed to create video session");
+            }
+
+            const sessionData = await sessionResponse.json();
+            console.log("✅ Video session created:", {
+                videoSessionId: sessionData.videoSessionId,
+                roomName: sessionData.roomName,
+                isNew: sessionData.isNew
+            });
+
+            // ✅ STEP 2: Now pass to onJoinCall with roomName AND videoSessionId
+            if (onJoinCall) {
+                const appointmentWithSession = {
+                    ...appointment,
+                    videoSessionId: sessionData.videoSessionId,
+                    roomName: sessionData.roomName, // ✅ ADD ROOM NAME
+                };
+                
+                console.log("📞 Calling onJoinCall with video session...");
+                console.log("   roomName:", sessionData.roomName);
+                onJoinCall(appointmentWithSession);
+            }
+
+        } catch (error) {
+            console.error("❌ Cannot join call:", error);
+            
+            const errorMessage = error instanceof Error 
+                ? error.message 
+                : "Failed to prepare video session";
+            
+            toast({
+                title: "Error",
+                description: errorMessage,
+                variant: "destructive",
+            });
+        }
+    };
 
 
     return (
@@ -268,7 +370,6 @@ export default function AppointmentStatusManager({
                         </div>
                     </div>
 
-                    {/* Patient Notes */}
                     {appointment.notes && (
                         <div className="mb-4 p-3 bg-muted/50 rounded-lg border border-border">
                             <p className="text-xs font-semibold text-muted-foreground mb-1">
@@ -278,9 +379,21 @@ export default function AppointmentStatusManager({
                         </div>
                     )}
 
-                    <div className="flex justify-end gap-2">
-                        {/* DoctorScheduleButton shows up for Scheduled/Confirmed appointments only */}
-                        {userRole === "doctor" && isActionable && (
+                    <div className="flex justify-end gap-2 flex-wrap">
+                        {/* ✅ JOIN CALL BUTTON FOR DOCTOR - NOW WITH FIXED CONDITION */}
+                        {userRole === "doctor" && isReadyToJoin && onJoinCall && (
+                            <Button
+                                size="sm"
+                                onClick={handleJoinCall}
+                                className="bg-green-600 hover:bg-green-700"
+                            >
+                                <Video className="w-4 h-4 mr-2" />
+                                Join Call
+                            </Button>
+                        )}
+
+                        {/* SCHEDULE BUTTON */}
+                        {userRole === "doctor" && isActionable && !isScheduleDisabled && (
                             <DoctorScheduleButton
                                 appointmentId={appointment._id || appointment.id || ""}
                                 patientId={appointment.patientId || ""}
@@ -290,12 +403,12 @@ export default function AppointmentStatusManager({
                                 currentStatus={appointment.status || "scheduled"}
                             />
                         )}
-                        {/* Manage Status Button (Visible for doctors) */}
+
+                        {/* MANAGE STATUS BUTTON */}
                         {userRole === "doctor" && (
                             <Button
                                 size="sm"
                                 onClick={() => {
-                                    // Reset selectedStatus to the current actual status on open
                                     setSelectedStatus(initialStatus); 
                                     setIsEditDialogOpen(true);
                                 }}
@@ -309,7 +422,7 @@ export default function AppointmentStatusManager({
                 </CardContent>
             </Card>
 
-            {/* Edit Dialog */}
+            {/* EDIT DIALOG */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
@@ -354,6 +467,7 @@ export default function AppointmentStatusManager({
                             </div>
                         </div>
 
+                        {/* NOTES FIELD */}
                         <div>
                             <Label htmlFor="notes" className="text-sm font-semibold">
                                 Appointment Notes
@@ -365,9 +479,11 @@ export default function AppointmentStatusManager({
                                 onChange={(e) => setNotes(e.target.value)}
                                 rows={3}
                                 className="mt-2"
+                                disabled={updateStatusMutation.isPending}
                             />
                         </div>
 
+                        {/* PRESCRIPTION FIELDS - ONLY FOR COMPLETED STATUS */}
                         {selectedStatus === "completed" && (
                             <>
                                 <div>
@@ -381,6 +497,7 @@ export default function AppointmentStatusManager({
                                         onChange={(e) => setPrescription(e.target.value)}
                                         rows={3}
                                         className="mt-2"
+                                        disabled={updateStatusMutation.isPending}
                                     />
                                 </div>
 
@@ -407,6 +524,7 @@ export default function AppointmentStatusManager({
                                                     accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                                                     onChange={handleFileChange}
                                                     className="hidden"
+                                                    disabled={updateStatusMutation.isPending}
                                                 />
                                             </label>
                                         ) : (
@@ -421,6 +539,7 @@ export default function AppointmentStatusManager({
                                                     size="sm"
                                                     variant="ghost"
                                                     onClick={removeFile}
+                                                    disabled={updateStatusMutation.isPending}
                                                 >
                                                     <XIcon className="w-4 h-4" />
                                                 </Button>
@@ -431,10 +550,12 @@ export default function AppointmentStatusManager({
                             </>
                         )}
 
+                        {/* ACTION BUTTONS */}
                         <div className="flex justify-end space-x-3">
                             <Button
                                 variant="outline"
                                 onClick={() => setIsEditDialogOpen(false)}
+                                disabled={updateStatusMutation.isPending}
                             >
                                 Cancel
                             </Button>
@@ -451,3 +572,5 @@ export default function AppointmentStatusManager({
         </>
     );
 }
+
+export default AppointmentStatusManager;
