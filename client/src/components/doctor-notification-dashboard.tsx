@@ -12,31 +12,31 @@ import {
   CheckCircle, 
   ArrowLeft, 
   AlertCircle, 
-  Loader2
+  Loader2,
+  Trash2 // Updated to Trash2
 } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-// Removed unused import: import { DoctorScheduleButton } from "@/components/doctor-schedule-system"; 
 
 interface AppointmentRequest {
   _id: string;
-  appointmentId: string; // Note: Using _id as appointmentId for simplicity here
+  appointmentId: string;
   patientId: string;
   patientName: string;
   patientEmail: string;
-  requestDate: string; // Should correspond to createdAt
-  preferredDate: string; // Corresponds to appointmentDate
+  requestDate: string; 
+  preferredDate: string; 
   preferredTime: string;
   consultationType: "Video Call" | "In-Person";
   duration: string;
-  status: "pending"; // Only pending requests show here
+  status: "pending"; 
   fee: number;
   notes?: string;
 }
 
 interface AwaitingPaymentAppointment {
   _id: string;
-  appointmentId: string; // Note: Using _id as appointmentId for simplicity here
+  appointmentId: string;
   patientId: string;
   patientName: string;
   patientEmail: string;
@@ -50,7 +50,7 @@ interface AwaitingPaymentAppointment {
 }
 
 /* ------------------------------------------
-   Appointment Request Detail View (Handles status: pending)
+  Appointment Request Detail View (Handles status: pending)
 -------------------------------------------*/
 const AppointmentRequestDetailView = ({ 
   request, 
@@ -61,8 +61,8 @@ const AppointmentRequestDetailView = ({
 }: { 
   request: AppointmentRequest;
   onBack: () => void;
-  onAccept: (id: string) => Promise<void>;
-  onReject: (id: string, reason: string) => Promise<void>;
+  onAccept: (id: string) => void; 
+  onReject: (id: string, reason: string) => void;
   isLoading: boolean;
 }) => {
   const [rejectReason, setRejectReason] = useState("");
@@ -222,7 +222,7 @@ const AppointmentRequestDetailView = ({
 };
 
 /* ------------------------------------------
-   Awaiting Payment Detail View (Handles status: awaiting_payment)
+  Awaiting Payment Detail View (Handles status: awaiting_payment)
 -------------------------------------------*/
 const AwaitingPaymentDetailView = ({ 
   appointment, 
@@ -320,13 +320,14 @@ const AwaitingPaymentDetailView = ({
 );
 
 /* ------------------------------------------
-   Notification List Renderer (Used for both tabs)
+  Notification List Renderer (Used for both tabs)
 -------------------------------------------*/
 const NotificationList = ({
   items,
   Icon,
   emptyMessage,
   onItemClick,
+  onDelete, 
   type
 }: any) => {
   // Use appointmentDate for payment, requestDate for request
@@ -362,11 +363,28 @@ const NotificationList = ({
                 </p>
               </div>
             </div>
-            <div className="text-right ml-4 flex-shrink-0">
-              <p className="text-sm font-bold text-white">₹{item.fee}</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {type === "request" ? "New Request" : "Awaiting Payment"}
-              </p>
+            
+            {/* Added flex container for fee and delete button */}
+            <div className="text-right ml-4 flex-shrink-0 flex items-center gap-3"> 
+              <div className="text-right">
+                <p className="text-sm font-bold text-white">₹{item.fee}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {type === "request" ? "New Request" : "Awaiting Payment"}
+                </p>
+              </div>
+              
+              {/* DELETE BUTTON: Now uses Trash2 */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevents opening detail view
+                  onDelete(item._id);
+                }}
+                className="p-1 rounded-full text-slate-500 hover:text-red-500 hover:bg-slate-700 transition-colors"
+                title="Dismiss Notification"
+                disabled={!onDelete}
+              >
+                <Trash2 className="w-4 h-4" /> {/* Trash2 Icon */}
+              </button>
             </div>
           </div>
         </div>
@@ -381,7 +399,7 @@ const NotificationList = ({
 };
 
 /* ------------------------------------------
-   Main Component
+  Main Component
 -------------------------------------------*/
 export const DoctorNotificationDashboard = () => {
   const queryClient = useQueryClient();
@@ -398,7 +416,7 @@ export const DoctorNotificationDashboard = () => {
       if (!res.ok) throw new Error("Failed to fetch requests");
       return res.json();
     },
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 10000, 
   });
 
   // Fetch awaiting payment appointments (status: 'awaiting_payment')
@@ -409,7 +427,7 @@ export const DoctorNotificationDashboard = () => {
       if (!res.ok) throw new Error("Failed to fetch awaiting payment");
       return res.json();
     },
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 10000, 
   });
 
   // Accept request mutation (Changes status from 'pending' to 'awaiting_payment')
@@ -425,7 +443,6 @@ export const DoctorNotificationDashboard = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/doctor/appointment-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/doctor/awaiting-payment-appointments"] });
-      // Also invalidate dashboard appointments, as the total patient count might change if appointments are managed there
       queryClient.invalidateQueries({ queryKey: ["/api/appointments"] }); 
       
       toast({ title: "✅ Appointment accepted! Patient will receive payment notification." });
@@ -452,7 +469,7 @@ export const DoctorNotificationDashboard = () => {
           body: JSON.stringify({ reason })
         }
       );
-      if (!res.ok) throw new Error("Failed to reject appointment");
+      if (!res.ok) throw new Error("Failed to reject appointment"); 
       return res.json();
     },
     onSuccess: () => {
@@ -469,10 +486,36 @@ export const DoctorNotificationDashboard = () => {
       });
     },
   });
+  
+  // Delete/Dismiss Notification Mutation
+  const deleteNotificationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(
+        `/api/doctor/notifications/${id}`, 
+        { method: "DELETE" } 
+      );
+      if (!res.ok) throw new Error("Failed to dismiss notification");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/doctor/appointment-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/doctor/awaiting-payment-appointments"] });
+      toast({ title: "🗑️ Notification dismissed." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to dismiss notification",
+        variant: "destructive"
+      });
+    },
+  });
+
 
   const isLoading = requestsLoading || paymentLoading || 
-                    acceptRequestMutation.isPending || 
-                    rejectRequestMutation.isPending;
+                     acceptRequestMutation.isPending || 
+                     rejectRequestMutation.isPending ||
+                     deleteNotificationMutation.isPending; 
 
   // Show detail view for Requests (pending)
   if (selectedItem && selectedType === "request") {
@@ -483,11 +526,11 @@ export const DoctorNotificationDashboard = () => {
           setSelectedItem(null);
           setSelectedType(null);
         }}
-        onAccept={async (id) => {
-          await acceptRequestMutation.mutateAsync(id);
+        onAccept={(id) => {
+          acceptRequestMutation.mutate(id);
         }}
-        onReject={async (id, reason) => {
-          await rejectRequestMutation.mutateAsync({ id, reason });
+        onReject={(id, reason) => {
+          rejectRequestMutation.mutate({ id, reason });
         }}
         isLoading={isLoading}
       />
@@ -507,10 +550,10 @@ export const DoctorNotificationDashboard = () => {
     );
   }
 
-  // Main list view (This is what matches the screenshot)
+  // Main list view
   return (
     <div className="space-y-6 bg-slate-950 min-h-screen p-6 rounded-lg">
-      {/* --- TAB NAVIGATION (Matches Screenshot) --- */}
+      {/* --- TAB NAVIGATION --- */}
       <div className="flex gap-3 bg-slate-900 p-2 rounded-lg w-fit border border-slate-700">
         <button
           onClick={() => setActiveTab("requests")}
@@ -560,6 +603,7 @@ export const DoctorNotificationDashboard = () => {
           items={appointmentRequests}
           Icon={MessageSquare}
           emptyMessage="No pending appointment requests."
+          onDelete={(id: string) => deleteNotificationMutation.mutate(id)} 
           onItemClick={(item: AppointmentRequest) => {
             setSelectedItem(item);
             setSelectedType("request");
@@ -574,6 +618,7 @@ export const DoctorNotificationDashboard = () => {
           items={awaitingPaymentAppointments}
           Icon={Clock}
           emptyMessage="No appointments awaiting payment."
+          onDelete={(id: string) => deleteNotificationMutation.mutate(id)} 
           onItemClick={(item: AwaitingPaymentAppointment) => {
             setSelectedItem(item);
             setSelectedType("payment");

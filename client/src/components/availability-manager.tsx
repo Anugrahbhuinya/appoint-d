@@ -249,7 +249,12 @@ const specificAvailabilityForMonth = useMemo(() => {
     })
     .sort((a, b) => {
       if (!a.specificDate || !b.specificDate) return 0;
-      return a.specificDate.localeCompare(b.specificDate) || a.startTime.localeCompare(b.startTime);
+      const dateCompare = a.specificDate.localeCompare(b.specificDate);
+      if (dateCompare !== 0) return dateCompare;
+      // Fix: provide defaults for undefined startTime
+      const timeA = a.startTime || "00:00";
+      const timeB = b.startTime || "00:00";
+      return timeA.localeCompare(timeB);
     });
 }, [availability, selectedOverviewMonth]);
 
@@ -258,7 +263,9 @@ const recurringAvailability = useMemo(() => {
     .filter((slot) => !slot.specificDate)
     .sort((a, b) => {
       if (a.dayOfWeek === b.dayOfWeek) {
-        return a.startTime.localeCompare(b.startTime);
+        const timeA = a.startTime || "00:00";
+        const timeB = b.startTime || "00:00";
+        return timeA.localeCompare(timeB);
       }
       return a.dayOfWeek - b.dayOfWeek;
     });

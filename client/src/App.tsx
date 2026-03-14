@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 
+// Page Imports
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import DoctorPortal from "@/pages/doctor-portal";
@@ -17,26 +18,38 @@ import ContactPage from "@/pages/contact-page";
 import FAQPage from "@/pages/faq-page";
 import TermsPage from "@/pages/terms-page";
 import CheckoutPage from "@/pages/checkout-page";
-import VideoConsultation from "@/pages/video-consultation";
+import VideoConsultationPage from "@/pages/video-consultation"; // Note: renamed for clarity
 import NotFound from "@/pages/not-found";
 import SearchResultsPage from "@/pages/search-results";
 
 function Router() {
   return (
     <Switch>
+      {/* Public Routes */}
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
-      <ProtectedRoute path="/doctor" component={DoctorPortal} />
-      <ProtectedRoute path="/patient" component={PatientPortal} />
       <Route path="/admin" component={AdminLogin} />
       <Route path="/admin-portal" component={AdminDashboard} />
       <Route path="/about" component={AboutPage} />
       <Route path="/contact" component={ContactPage} />
       <Route path="/faq" component={FAQPage} />
       <Route path="/terms" component={TermsPage} />
-      <ProtectedRoute path="/checkout" component={CheckoutPage} />
-      <ProtectedRoute path="/consultation/:appointmentId" component={VideoConsultation} />
       <Route path="/search" component={SearchResultsPage} />
+
+      {/* Protected Routes */}
+      <ProtectedRoute path="/doctor" component={DoctorPortal} />
+      <ProtectedRoute path="/patient" component={PatientPortal} />
+      <ProtectedRoute path="/checkout" component={CheckoutPage} />
+      
+      {/* This now works because ProtectedRoute wraps its component 
+          in a Route that provides the 'params' object.
+      */}
+      <ProtectedRoute 
+        path="/consultation/:appointmentId" 
+        component={VideoConsultationPage} 
+      />
+
+      {/* Fallback */}
       <Route component={NotFound} />
     </Switch>
   );
